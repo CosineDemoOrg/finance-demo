@@ -210,10 +210,16 @@ def create_app():
         - basic validation checks fail
         - response code from ledgerwriter is not 201
         """
+        def _wants_json():
+            accept_header = request.headers.get('Accept', '')
+            return 'application/json' in accept_header.lower()
+
         token = request.cookies.get(app.config['TOKEN_NAME'])
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting payment: user is not authenticated.')
+            if _wants_json():
+                return jsonify({'error': 'not authenticated'}), 401
             return abort(401)
         try:
             account_id = decode_token(token)['acct']
@@ -238,24 +244,35 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Payment initiated successfully.')
+            if _wants_json():
+                return jsonify({'message': 'Payment successful'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Payment successful',
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
-        except requests.exceptions.RequestException as err:
-            app.logger.error('Error submitting payment: %s', str(err))
-        except UserWarning as warn:
-            app.logger.error('Error submitting payment: %s', str(warn))
-            msg = 'Payment failed: {}'.format(str(warn))
+        except requests.exceptions.HTTPError as http_err:
+            # Propagate the exact status code/text from backend
+            status = http_err.response.status_code if http_err.response is not None else 500
+            body = http_err.response.text if http_err.response is not None else 'Payment failed'
+            app.logger.error('Error submitting payment: %s', str(http_err))
+            if _wants_json():
+                return jsonify({'error': body}), status
+            msg = 'Payment failed: {}'.format(body)
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
+        except requests.exceptions.RequestException as err:
+            # Network or other request errors
+            app.logger.error('Error submitting payment: %s', str(err))
+            if _wants_json():
+                return jsonify({'error': 'Payment request error'}), 502
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
-            msg = 'Payment failed: {} is not a valid number'.format(user_input)
+            if _wants_json():
+                return jsonify({'error': f'Payment failed: {user_input} is not a valid number'}), 400
 
         return redirect(url_for('home',
                                 msg='Payment failed',
@@ -272,10 +289,16 @@ def create_app():
         - routing number == local routing number
         - response code from ledgerwriter is not 201
         """
+        def _wants_json():
+            accept_header = request.headers.get('Accept', '')
+            return 'application/json' in accept_header.lower()
+
         token = request.cookies.get(app.config['TOKEN_NAME'])
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting deposit: user is not authenticated.')
+            if _wants_json():
+                return jsonify({'error': 'not authenticated'}), 401
             return abort(401)
         try:
             # get account id from token
@@ -284,6 +307,8 @@ def create_app():
                 external_account_num = request.form['external_account_num']
                 external_routing_num = request.form['external_routing_num']
                 if external_routing_num == app.config['LOCAL_ROUTING']:
+                    if _wants_json():
+                        return jsonify({'error': 'invalid routing number'}), 400
                     raise UserWarning("invalid routing number")
                 external_label = request.form.get('external_label', None)
                 if external_label:
@@ -305,21 +330,29 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
+            if _wants_json():
+                return jsonify({'message': 'Deposit successful'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Deposit successful',
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
-        except requests.exceptions.RequestException as err:
-            app.logger.error('Error submitting deposit: %s', str(err))
-        except UserWarning as warn:
-            app.logger.error('Error submitting deposit: %s', str(warn))
-            msg = 'Deposit failed: {}'.format(str(warn))
+        except requests.exceptions.HTTPError as http_err:
+            status = http_err.response.status_code if http_err.response is not None else 500
+            body = http_err.response.text if http_err.response is not None else 'Deposit failed'
+            app.logger.error('Error submitting deposit: %s', str(http_err))
+            if _wants_json():
+                return jsonify({'error': body}), status
+            msg = 'Deposit failed: {}'.format(body)
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
+        except requests.exceptions.RequestException as err:
+            app.logger.error('Error submitting deposit: %s', str(err))
+            if _wants_json():
+                return jsonify({'error': 'Deposit request error'}), 502
 
         return redirect(url_for('home',
                                 msg='Deposit failed',
@@ -335,10 +368,8 @@ def create_app():
                              data=jsonify(transaction_data).data,
                              headers=hed,
                              timeout=app.config['BACKEND_TIMEOUT'])
-        try:
-            resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
-        except requests.exceptions.HTTPError as http_request_err:
-            raise UserWarning(resp.text) from http_request_err
+        # Raise on HTTP Status code 4XX or 5XX - let caller inspect error/response
+        resp.raise_for_status()
         # Short delay to allow the transaction to propagate to balancereader
         # and transaction-history
         sleep(0.25)
