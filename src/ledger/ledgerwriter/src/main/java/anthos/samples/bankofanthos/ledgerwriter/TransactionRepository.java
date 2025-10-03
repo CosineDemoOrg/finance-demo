@@ -14,6 +14,7 @@
 
 package anthos.samples.bankofanthos.ledgerwriter;
 
+import anthos.samples.bankofanthos.ledger.common.Transaction;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 

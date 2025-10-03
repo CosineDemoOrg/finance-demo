@@ -29,6 +29,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -37,6 +38,7 @@ import org.springframework.web.client.RestTemplate;
  * Microservice to accept new transactions for the bank ledger.
  */
 @SpringBootApplication(exclude = ZipkinAutoConfiguration.class)
+@ComponentScan(basePackages = {"anthos.samples.bankofanthos"})
 public class LedgerWriterApplication {
 
     private static final Logger LOGGER =

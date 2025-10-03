@@ -16,9 +16,9 @@
 
 package anthos.samples.bankofanthos.ledgerwriter;
 
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_WHEN_AUTHORIZATION_HEADER_NULL;
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION;
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE;
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.EXCEPTION_MESSAGE_WHEN_AUTHORIZATION_HEADER_NULL;
 
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.exceptions.JWTVerificationException;
@@ -81,7 +81,7 @@ public final class LedgerWriterController {
             JWTVerifier verifier,
             StackdriverMeterRegistry meterRegistry,
             TransactionRepository transactionRepository,
-            TransactionValidator transactionValidator,
+            anthos.samples.bankofanthos.ledger.common.TransactionValidator transactionValidator,
             @Value("${LOCAL_ROUTING_NUM}") String localRoutingNum,
             @Value("http://${BALANCES_API_ADDR}/balances")
                     String balancesApiUri,
@@ -133,7 +133,7 @@ public final class LedgerWriterController {
     @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<?> addTransaction(
             @RequestHeader("Authorization") String bearerToken,
-            @RequestBody Transaction transaction) {
+            @RequestBody anthos.samples.bankofanthos.ledger.common.Transaction transaction) {
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             bearerToken = bearerToken.split("Bearer ")[1];
         }
