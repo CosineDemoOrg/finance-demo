@@ -26,9 +26,13 @@ import io.micrometer.stackdriver.StackdriverMeterRegistry;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -298,5 +302,158 @@ public final class TransactionHistoryController {
             return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-}
+
+    /**
+     * Visualize transactions volume over time (daily) as HTML dashboard or JSON.
+     * Query params:
+     *  - from: inclusive start date (YYYY-MM-DD)
+     *  - to: inclusive end date (YYYY-MM-DD)
+     *  - format: "html" (default) or "json"
+     */
+    @GetMapping(value = "/transactions/{accountId}/visualize")
+    public ResponseEntity<?> visualizeTransactions(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(value = "from", required = false) String from,
+            @RequestParam(value = "to", required = false) String to,
+            @RequestParam(value = "format", required = false) String format) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to visualize account transactions: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+
+            Date fromDate = null;
+            Date toDate = null;
+            ZoneId zone = ZoneId.systemDefault();
+            if (from != null && !from.isEmpty()) {
+                try {
+                    LocalDate d = LocalDate.parse(from);
+                    fromDate = Date.from(d.atStartOfDay(zone).toInstant());
+                } catch (DateTimeParseException ex) {
+                    return new ResponseEntity<>("invalid 'from' date format, expected YYYY-MM-DD",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+            if (to != null && !to.isEmpty()) {
+                try {
+                    LocalDate d = LocalDate.parse(to);
+                    toDate = Date.from(d.plusDays(1).atStartOfDay(zone).toInstant());
+                } catch (DateTimeParseException ex) {
+                    return new ResponseEntity<>("invalid 'to' date format, expected YYYY-MM-DD",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+
+            Deque<Transaction> historyList = cache.get(accountId);
+
+            // Aggregate per day: count and total amount (cents)
+            Map<LocalDate, Integer> counts = new LinkedHashMap<>();
+            Map<LocalDate, Long> totals = new LinkedHashMap<>();
+
+            for (Transaction t : historyList) {
+                Date ts = t.getTimestamp();
+                if (ts == null) {
+                    continue;
+                }
+                if (fromDate != null && ts.before(fromDate)) {
+                    continue;
+                }
+                if (toDate != null && !ts.before(toDate)) {
+                    continue;
+                }
+                LocalDate day = ts.toInstant().atZone(zone).toLocalDate();
+                counts.put(day, counts.getOrDefault(day, 0) + 1);
+                totals.put(day, totals.getOrDefault(day, 0L) + (long) t.getAmount());
+            }
+
+            // Sort by day ascending
+            List<LocalDate> days = new ArrayList<>(counts.keySet());
+            days.sort(LocalDate::compareTo);
+            List<String> labels = new ArrayList<>();
+            List<Integer> volumes = new ArrayList<>();
+            List<Double> amounts = new ArrayList<>();
+            for (LocalDate d : days) {
+                labels.add(d.toString());
+                volumes.add(counts.get(d));
+                double dollars = (totals.getOrDefault(d, 0L)) / 100.0;
+                amounts.add(dollars);
+            }
+
+            if ("json".equalsIgnoreCase(format)) {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("accountId", accountId);
+                payload.put("labels", labels);
+                payload.put("volume_per_day", volumes);
+                payload.put("amount_per_day_usd", amounts);
+                return new ResponseEntity<>(payload, HttpStatus.OK);
+            }
+
+            StringBuilder html = new StringBuilder();
+            html.append("<!doctype html><html><head><meta charset=\"utf-8\">");
+            html.append("<title>Transactions Visualization</title>");
+            html.append("<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>");
+            html.append("<style>body{font-family:Arial,sans-serif;margin:20px;} .chart{max-width:900px;}</style>");
+            html.append("</head><body>");
+            html.append("<h2>Transactions for Account ").append(accountId).append("</h2>");
+            html.append("<p>Showing daily counts and total amounts");
+            if (from != null && !from.isEmpty()) {
+                html.append(" from ").append(from);
+            }
+            if (to != null && !to.isEmpty()) {
+                html.append(" to ").append(to);
+            }
+            html.append(".</p>");
+            html.append("<div class=\"chart\"><canvas id=\"volumeChart\"></canvas></div>");
+            html.append("<div class=\"chart\"><canvas id=\"amountChart\"></canvas></div>");
+            html.append("<script>");
+            html.append("const labels=").append(toJsonArray(labels)).append(";");
+            html.append("const volumeData=").append(toJsonArray(volumes)).append(";");
+            html.append("const amountData=").append(toJsonArray(amounts)).append(";");
+            html.append("const ctx1=document.getElementById('volumeChart');");
+            html.append("new Chart(ctx1,{type:'line',data:{labels:labels,datasets:[{label:'Transactions per Day',data:volumeData,fill:false,borderColor:'rgb(75,192,192)',tension:0.1}]}});");
+            html.append("const ctx2=document.getElementById('amountChart');");
+            html.append("new Chart(ctx2,{type:'line',data:{labels:labels,datasets:[{label:'Total Amount per Day (USD)',data:amountData,fill:false,borderColor:'rgb(255,99,132)',tension:0.1}]},options:{scales:{y:{ticks:{callback:(v)=>'
++v.toFixed(2)}}}}});");
+            html.append("</script>");
+            html.append("</body></html>");
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_HTML);
+            return new ResponseEntity<>(html.toString(), headers, HttpStatus.OK);
+
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to visualize account transactions: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // Simple helpers to serialize arrays to JSON without adding dependencies
+    private String toJsonArray(List<?> list) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        for (int i = 0; i < list.size(); i++) {
+            Object o = list.get(i);
+            if (o == null) {
+                sb.append("null");
+            } else if (o instanceof Number) {
+                sb.append(o.toString());
+            } else {
+                sb.append("\"").append(o.toString().replace("\"", "\\\"")).append("\"");
+            }
+            if (i < list.size() - 1) {
+                sb.append(",");
+            }
+        }
+        sb.append("]");
+        return sb.toString();
+    }
 }
