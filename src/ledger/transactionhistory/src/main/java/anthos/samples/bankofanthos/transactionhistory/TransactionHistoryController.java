@@ -298,5 +298,216 @@ public final class TransactionHistoryController {
             return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-}
+
+    /**
+     * Visualise transactions over time. Parses CSV and returns HTML or JSON dashboard.
+     *
+     * Query params:
+     *  - from: inclusive start date (YYYY-MM-DD)
+     *  - to: inclusive end date (YYYY-MM-DD)
+     *  - format: "html" (default) or "json"
+     */
+    @GetMapping("/transactions/{accountId}/visualise")
+    public ResponseEntity<?> visualiseTransactions(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(value = "from", required = false) String from,
+            @RequestParam(value = "to", required = false) String to,
+            @RequestParam(value = "format", required = false, defaultValue = "html") String format) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to visualise account transactions: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+
+            Date fromDate = null;
+            Date toDate = null;
+            ZoneId zone = ZoneId.systemDefault();
+            if (from != null && !from.isEmpty()) {
+                try {
+                    LocalDate d = LocalDate.parse(from);
+                    fromDate = Date.from(d.atStartOfDay(zone).toInstant());
+                } catch (DateTimeParseException ex) {
+                    return new ResponseEntity<>("invalid 'from' date format, expected YYYY-MM-DD",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+            if (to != null && !to.isEmpty()) {
+                try {
+                    LocalDate d = LocalDate.parse(to);
+                    toDate = Date.from(d.plusDays(1).atStartOfDay(zone).toInstant());
+                } catch (DateTimeParseException ex) {
+                    return new ResponseEntity<>("invalid 'to' date format, expected YYYY-MM-DD",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+
+            Deque<Transaction> historyList = cache.get(accountId);
+
+            StringBuilder csv = new StringBuilder();
+            csv.append("transaction_id,timestamp,from_account,from_routing,to_account,to_routing,amount_cents\n");
+            for (Transaction t : historyList) {
+                Date ts = t.getTimestamp();
+                if (fromDate != null && (ts == null || ts.before(fromDate))) {
+                    continue;
+                }
+                if (toDate != null && (ts == null || !ts.before(toDate))) {
+                    continue;
+                }
+                csv.append(t.getTransactionId()).append(",");
+                csv.append(ts != null ? ts.toInstant().toString() : "").append(",");
+                csv.append(t.getFromAccountNum()).append(",");
+                csv.append(t.getFromRoutingNum()).append(",");
+                csv.append(t.getToAccountNum()).append(",");
+                csv.append(t.getToRoutingNum()).append(",");
+                csv.append(t.getAmount()).append("\n");
+            }
+
+            java.util.Map<String, Integer> dailyCounts = new java.util.LinkedHashMap<>();
+            java.util.Map<String, Long> dailyAmounts = new java.util.LinkedHashMap<>();
+
+            String[] lines = csv.toString().split("\n");
+            for (int i = 1; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split(",", -1);
+                if (parts.length < 7) {
+                    continue;
+                }
+                String tsIso = parts[1];
+                String amountStr = parts[6];
+                if (tsIso == null || tsIso.isEmpty()) {
+                    continue;
+                }
+                java.time.Instant inst;
+                try {
+                    inst = java.time.Instant.parse(tsIso);
+                } catch (Exception ex) {
+                    continue;
+                }
+                LocalDate day = inst.atZone(zone).toLocalDate();
+                String key = day.toString();
+                dailyCounts.put(key, dailyCounts.getOrDefault(key, 0) + 1);
+                long amt = 0L;
+                try {
+                    amt = Long.parseLong(amountStr);
+                } catch (NumberFormatException nfe) {
+                    // ignore
+                }
+                dailyAmounts.put(key, dailyAmounts.getOrDefault(key, 0L) + amt);
+            }
+
+            if ("json".equalsIgnoreCase(format)) {
+                StringBuilder json = new StringBuilder();
+                json.append("{\"days\":[");
+                boolean first = true;
+                for (String day : dailyCounts.keySet()) {
+                    if (!first) {
+                        json.append(",");
+                    }
+                    json.append("\"").append(day).append("\"");
+                    first = false;
+                }
+                json.append("],\"counts\":[");
+                first = true;
+                for (String day : dailyCounts.keySet()) {
+                    if (!first) {
+                        json.append(",");
+                    }
+                    json.append(dailyCounts.get(day));
+                    first = false;
+                }
+                json.append("],\"amounts_cents\":[");
+                first = true;
+                for (String day : dailyCounts.keySet()) {
+                    if (!first) {
+                        json.append(",");
+                    }
+                    json.append(dailyAmounts.getOrDefault(day, 0L));
+                    first = false;
+                }
+                json.append("]}");
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                return new ResponseEntity<>(json.toString(), headers, HttpStatus.OK);
+            } else {
+                StringBuilder html = new StringBuilder();
+                html.append("<!doctype html><html><head><meta charset=\"utf-8\"><title>Transactions Visualisation</title>");
+                html.append("<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>");
+                html.append("</head><body>");
+                html.append("<h2>Transaction Volume Over Time</h2>");
+                html.append("<canvas id=\"countChart\" width=\"600\" height=\"300\"></canvas>");
+                html.append("<h2>Total Amount (cents) Over Time</h2>");
+                html.append("<canvas id=\"amountChart\" width=\"600\" height=\"300\"></canvas>");
+                html.append("<script>");
+                html.append("const labels=").append(toJsArray(dailyCounts.keySet())).append(";");
+                html.append("const counts=").append(toJsNumberArray(dailyCounts)).append(";");
+                html.append("const amounts=").append(toJsNumberArrayLong(dailyAmounts, dailyCounts.keySet())).append(";");
+                html.append("new Chart(document.getElementById('countChart'),{type:'line',data:{labels:labels,datasets:[{label:'Transactions per day',data:counts,borderColor:'#3366cc',fill:false}]}});");
+                html.append("new Chart(document.getElementById('amountChart'),{type:'line',data:{labels:labels,datasets:[{label:'Amount (cents) per day',data:amounts,borderColor:'#dc3912',fill:false}]}});");
+                html.append("</script></body></html>");
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.TEXT_HTML);
+                return new ResponseEntity<>(html.toString(), headers, HttpStatus.OK);
+            }
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to visualise account transactions: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private String toJsArray(java.util.Collection<String> items) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (String s : items) {
+            if (!first) {
+                sb.append(",");
+            }
+            sb.append("\"").append(s).append("\"");
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String toJsNumberArray(java.util.Map<String, Integer> map) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (String key : map.keySet()) {
+            if (!first) {
+                sb.append(",");
+            }
+            sb.append(map.get(key));
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String toJsNumberArrayLong(java.util.Map<String, Long> map, java.util.Collection<String> order) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (String key : order) {
+            if (!first) {
+                sb.append(",");
+            }
+            sb.append(map.getOrDefault(key, 0L));
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
 }
