@@ -16,6 +16,7 @@ package anthos.samples.bankofanthos.balancereader;
 
 import java.util.List;
 
+import anthos.samples.bankofanthos.ledger.common.Transaction;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;

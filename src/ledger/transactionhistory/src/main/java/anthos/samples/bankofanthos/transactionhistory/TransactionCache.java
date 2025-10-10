@@ -16,6 +16,7 @@
 
 package anthos.samples.bankofanthos.transactionhistory;
 
+import anthos.samples.bankofanthos.ledger.common.Transaction;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;

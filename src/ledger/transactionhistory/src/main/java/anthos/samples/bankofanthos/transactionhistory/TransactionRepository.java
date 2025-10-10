@@ -17,6 +17,7 @@ package anthos.samples.bankofanthos.transactionhistory;
 import java.util.LinkedList;
 import java.util.List;
 
+import anthos.samples.bankofanthos.ledger.common.Transaction;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
