@@ -23,18 +23,30 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Deque;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -61,6 +73,7 @@ public final class TransactionHistoryController {
     private JWTVerifier verifier;
     private LedgerReader ledgerReader;
     private LoadingCache<String, Deque<Transaction>> cache;
+    private String localRoutingNum;
 
     /**
      * Constructor.
@@ -83,6 +96,7 @@ public final class TransactionHistoryController {
         GuavaCacheMetrics.monitor(meterRegistry, this.cache, "Guava");
         // Initialize transaction processor.
         this.ledgerReader = reader;
+        this.localRoutingNum = localRoutingNum;
         LOGGER.debug("Initialized transaction processor");
         this.ledgerReader.startWithCallback(transaction -> {
             final String fromId = transaction.getFromAccountNum();
@@ -206,5 +220,105 @@ public final class TransactionHistoryController {
             return new ResponseEntity<>("cache error",
                                               HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Export transaction history for the specified account as CSV, with optional date filters.
+     *
+     * Query params:
+     * - from: inclusive start date/time (ISO-8601). If only a date (yyyy-MM-dd) is provided, UTC start-of-day is assumed.
+     * - to: inclusive end date/time (ISO-8601). If only a date (yyyy-MM-dd) is provided, UTC end-of-day is assumed.
+     */
+    @GetMapping(value = "/transactions/{accountId}/export.csv", produces = "text/csv")
+    public ResponseEntity<?> exportTransactionsCsv(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(name = "from", required = false) String fromParam,
+            @RequestParam(name = "to", required = false) String toParam) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to export account transactions: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+
+            Date from = parseFrom(fromParam);
+            Date to = parseTo(toParam);
+
+            List<Transaction> transactions = dbRepo.findForAccountBetween(
+                    accountId, localRoutingNum, from, to);
+
+            StringBuilder sb = new StringBuilder();
+            // Header
+            sb.append("transactionId,fromAccountNum,fromRoutingNum,toAccountNum,toRoutingNum,amount,timestamp\n");
+            DateTimeFormatter tsFmt = DateTimeFormatter.ISO_INSTANT;
+            for (Transaction t : transactions) {
+                String ts = "";
+                Date tsDate = t.getTimestamp();
+                if (tsDate != null) {
+                    ts = tsFmt.format(tsDate.toInstant());
+                }
+                // naive CSV escaping for fields without commas/newlines expected
+                sb.append(t.getTransactionId()).append(",")
+                  .append(t.getFromAccountNum()).append(",")
+                  .append(t.getFromRoutingNum()).append(",")
+                  .append(t.getToAccountNum()).append(",")
+                  .append(t.getToRoutingNum()).append(",")
+                  .append(t.getAmount()).append(",")
+                  .append(ts)
+                  .append("\n");
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(new MediaType("text", "csv", StandardCharsets.UTF_8));
+            ContentDisposition disposition = ContentDisposition.attachment()
+                    .filename(accountId + "-transactions.csv")
+                    .build();
+            headers.setContentDisposition(disposition);
+
+            return new ResponseEntity<>(sb.toString(), headers, HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to export account transactions: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (Exception e) {
+            LOGGER.error("Failed to export account transactions", e);
+            return new ResponseEntity<>("internal error", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private Date parseFrom(String fromParam) {
+        if (fromParam == null || fromParam.isEmpty()) {
+            return new Date(0L);
+        }
+        try {
+            // Try ISO date-time first
+            Instant i = Instant.parse(fromParam);
+            return Date.from(i);
+        } catch (Exception ignore) {
+            // Try date only (yyyy-MM-dd)
+        }
+        LocalDate d = LocalDate.parse(fromParam);
+        return Date.from(d.atStartOfDay(ZoneOffset.UTC).toInstant());
+    }
+
+    private Date parseTo(String toParam) {
+        if (toParam == null || toParam.isEmpty()) {
+            return new Date(Long.MAX_VALUE);
+        }
+        try {
+            // Try ISO date-time first
+            Instant i = Instant.parse(toParam);
+            return Date.from(i);
+        } catch (Exception ignore) {
+            // Try date only (yyyy-MM-dd) -> end of day
+        }
+        LocalDate d = LocalDate.parse(toParam);
+        OffsetDateTime end = d.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC).minusNanos(1);
+        return Date.from(end.toInstant());
     }
 }
