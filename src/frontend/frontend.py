@@ -214,6 +214,9 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting payment: user is not authenticated.')
+            # Propagate proper status to API callers
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error='not authorized'), 401
             return abort(401)
         try:
             account_id = decode_token(token)['acct']
@@ -246,16 +249,27 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting payment: %s', str(err))
+            # Network or unexpected errors -> 502 for API callers
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error='upstream error'), 502
         except UserWarning as warn:
+            # UserWarning raised by _submit_transaction carries backend message and optional status
             app.logger.error('Error submitting payment: %s', str(warn))
-            msg = 'Payment failed: {}'.format(str(warn))
+            # Try to extract attached status_code if present
+            status = getattr(warn, 'status_code', 400)
+            message = str(warn)
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error=message), status
+            msg = 'Payment failed: {}'.format(message)
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
-            msg = 'Payment failed: {} is not a valid number'.format(user_input)
+            message = 'Payment failed: {} is not a valid number'.format(user_input)
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error=message), 400
 
         return redirect(url_for('home',
                                 msg='Payment failed',
@@ -276,6 +290,8 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting deposit: user is not authenticated.')
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error='not authorized'), 401
             return abort(401)
         try:
             # get account id from token
@@ -313,9 +329,15 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error='upstream error'), 502
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
-            msg = 'Deposit failed: {}'.format(str(warn))
+            status = getattr(warn, 'status_code', 400)
+            message = str(warn)
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify(error=message), status
+            msg = 'Deposit failed: {}'.format(message)
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
@@ -338,7 +360,10 @@ def create_app():
         try:
             resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
         except requests.exceptions.HTTPError as http_request_err:
-            raise UserWarning(resp.text) from http_request_err
+            # Attach status code to the UserWarning so callers can propagate it
+            warn = UserWarning(resp.text)
+            setattr(warn, 'status_code', resp.status_code)
+            raise warn from http_request_err
         # Short delay to allow the transaction to propagate to balancereader
         # and transaction-history
         sleep(0.25)
