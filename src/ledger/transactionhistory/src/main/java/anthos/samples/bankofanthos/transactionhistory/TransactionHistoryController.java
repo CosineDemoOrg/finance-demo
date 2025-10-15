@@ -297,6 +297,169 @@ public final class TransactionHistoryController {
             LOGGER.error("Cache error");
             return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    /**
+     * Visualise transactions as a simple dashboard (HTML or JSON).
+     *
+     * Query params:
+     *  - from: inclusive start date (YYYY-MM-DD)
+     *  - to: inclusive end date (YYYY-MM-DD)
+     *  - format: "html" (default) or "json"
+     */
+    @GetMapping("/transactions/{accountId}/visualise")
+    public ResponseEntity<?> visualiseTransactions(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(value = "from", required = false) String from,
+            @RequestParam(value = "to", required = false) String to,
+            @RequestParam(value = "format", required = false) String format) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to visualise account transactions: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+
+            Date fromDate = null;
+            Date toDate = null;
+            ZoneId zone = ZoneId.systemDefault();
+            if (from != null && !from.isEmpty()) {
+                try {
+                    LocalDate d = LocalDate.parse(from);
+                    fromDate = Date.from(d.atStartOfDay(zone).toInstant());
+                } catch (DateTimeParseException ex) {
+                    return new ResponseEntity<>("invalid 'from' date format, expected YYYY-MM-DD",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+            if (to != null && !to.isEmpty()) {
+                try {
+                    LocalDate d = LocalDate.parse(to);
+                    // end of day inclusive
+                    toDate = Date.from(d.plusDays(1).atStartOfDay(zone).toInstant());
+                } catch (DateTimeParseException ex) {
+                    return new ResponseEntity<>("invalid 'to' date format, expected YYYY-MM-DD",
+                            HttpStatus.BAD_REQUEST);
+                }
+            }
+
+            Deque<Transaction> historyList = cache.get(accountId);
+
+            java.util.Map<LocalDate, long[]> stats = new java.util.TreeMap<>();
+            for (Transaction t : historyList) {
+                Date ts = t.getTimestamp();
+                if (ts == null) {
+                    continue;
+                }
+                if (fromDate != null && ts.before(fromDate)) {
+                    continue;
+                }
+                if (toDate != null && !ts.before(toDate)) {
+                    continue;
+                }
+                LocalDate day = ts.toInstant().atZone(zone).toLocalDate();
+                long[] arr = stats.computeIfAbsent(day, k -> new long[] {0L, 0L});
+                arr[0] += 1; // count
+                arr[1] += (t.getAmount() == null ? 0 : t.getAmount()); // sum amount in cents
+            }
+
+            // Prepare series
+            java.util.List<String> labels = new java.util.ArrayList<>();
+            java.util.List<Long> counts = new java.util.ArrayList<>();
+            java.util.List<Long> amounts = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<LocalDate, long[]> e : stats.entrySet()) {
+                labels.add(e.getKey().toString());
+                counts.add(e.getValue()[0]);
+                amounts.add(e.getValue()[1]);
+            }
+
+            boolean json = format != null && format.equalsIgnoreCase("json");
+            if (json) {
+                java.util.Map<String, Object> dashboard = new java.util.LinkedHashMap<>();
+                dashboard.put("accountId", accountId);
+                dashboard.put("from", from);
+                dashboard.put("to", to);
+                java.util.List<java.util.Map<String, Object>> series = new java.util.ArrayList<>();
+                for (int i = 0; i < labels.size(); i++) {
+                    java.util.Map<String, Object> point = new java.util.LinkedHashMap<>();
+                    point.put("date", labels.get(i));
+                    point.put("count", counts.get(i));
+                    point.put("amount_cents", amounts.get(i));
+                    series.add(point);
+                }
+                dashboard.put("series", series);
+                return new ResponseEntity<>(dashboard, HttpStatus.OK);
+            } else {
+                StringBuilder html = new StringBuilder();
+                html.append("<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
+                html.append("<title>Transactions Dashboard</title>");
+                html.append("<script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>");
+                html.append("<style>body{font-family:sans-serif;margin:24px;} .charts{display:flex;gap:32px;flex-wrap:wrap;} .chart{width:600px;max-width:100%;}</style>");
+                html.append("</head><body>");
+                html.append("<h2>Transactions Dashboard</h2>");
+                html.append("<p>Account: ").append(accountId).append("</p>");
+                if ((from != null && !from.isEmpty()) || (to != null && !to.isEmpty())) {
+                    html.append("<p>Range: ")
+                        .append(from != null ? from : "")
+                        .append(" to ")
+                        .append(to != null ? to : "")
+                        .append("</p>");
+                }
+                html.append("<div class=\"charts\">");
+                html.append("<div class=\"chart\"><canvas id=\"countChart\"></canvas></div>");
+                html.append("<div class=\"chart\"><canvas id=\"amountChart\"></canvas></div>");
+                html.append("</div>");
+                // Embed data
+                html.append("<script>");
+                html.append("const labels=").append(toJsonArray(labels)).append(";");
+                html.append("const counts=").append(toJsonArrayLong(counts)).append(";");
+                html.append("const amounts=").append(toJsonArrayLong(amounts)).append(";");
+                html.append("const ctx1=document.getElementById('countChart');");
+                html.append("new Chart(ctx1,{type:'bar',data:{labels:labels,datasets:[{label:'Transactions per day',data:counts,backgroundColor:'rgba(54,162,235,0.5)'}]},options:{responsive:true,plugins:{legend:{display:true}},scales:{x:{ticks:{autoSkip:false}}}}});");
+                html.append("const ctx2=document.getElementById('amountChart');");
+                html.append("new Chart(ctx2,{type:'line',data:{labels:labels,datasets:[{label:'Amount (USD) per day',data:amounts.map(a=>a/100.0),borderColor:'rgba(255,99,132,0.8)',tension:0.2}]},options:{responsive:true,plugins:{legend:{display:true}},scales:{x:{ticks:{autoSkip:false}},y:{beginAtZero:true}}}});");
+                html.append("</script>");
+                html.append("</body></html>");
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.TEXT_HTML);
+                return new ResponseEntity<>(html.toString(), headers, HttpStatus.OK);
+            }
+
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to visualise account transactions: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // Helpers to serialize arrays for inline JS without introducing new dependencies
+    private String toJsonArray(java.util.List<String> items) {
+        StringBuilder sb = new StringBuilder(\"[\");
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) { sb.append(','); }
+            String s = items.get(i);
+            // very simple escaping for quotes and backslashes
+            s = s.replace(\"\\\\\", \"\\\\\\\\\").replace(\"\\\"\", \"\\\\\\\"\");
+            sb.append('\"').append(s).append('\"');
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    private String toJsonArrayLong(java.util.List<Long> items) {
+        StringBuilder sb = new StringBuilder(\"[\");
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) { sb.append(','); }
+            sb.append(items.get(i));
+        }
+        sb.append(']');
+        return sb.toString();
     }
 }
 }
