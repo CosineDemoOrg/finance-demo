@@ -58,6 +58,103 @@ def create_app():
     """
     app = Flask(__name__)
 
+    # Optional monitoring integrations (initialized lazily, do not error if missing)
+    sentry_sdk = None
+    dd_statsd = None
+    Counter = None
+    generate_latest = None
+    CONTENT_TYPE_LATEST = "text/plain"
+
+    try:
+        # Sentry
+        import sentry_sdk as _sentry_sdk  # type: ignore
+        if os.getenv("SENTRY_DSN"):
+            _sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"), traces_sample_rate=0.0)
+        sentry_sdk = _sentry_sdk
+    except Exception:
+        sentry_sdk = None
+
+    try:
+        # Datadog DogStatsD
+        from datadog import statsd as _dd_statsd  # type: ignore
+        dd_statsd = _dd_statsd
+    except Exception:
+        dd_statsd = None
+
+    try:
+        # Prometheus client
+        from prometheus_client import Counter as _Counter, generate_latest as _generate_latest, CONTENT_TYPE_LATEST as _CONTENT_TYPE_LATEST  # type: ignore
+        Counter = _Counter
+        generate_latest = _generate_latest
+        CONTENT_TYPE_LATEST = _CONTENT_TYPE_LATEST
+    except Exception:
+        Counter = None
+        generate_latest = None
+        CONTENT_TYPE_LATEST = "text/plain"
+
+    # Define Prometheus counters if available
+    payment_requests_total = None
+    payment_errors_total = None
+    if Counter is not None:
+        payment_requests_total = Counter(
+            "payment_requests_total",
+            "Total payment/deposit requests received",
+            ["endpoint"],
+        )
+        payment_errors_total = Counter(
+            "payment_errors_total",
+            "Total payment/deposit failures",
+            ["endpoint", "status"],
+        )
+
+    def emit_payment_error(endpoint, status, user_id):
+        """Emit a structured payment_error event to logs and monitoring backends."""
+        event = {
+            "event": "payment_error",
+            "status": status,
+            "endpoint": endpoint,
+            "user_id": user_id,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        }
+        # Structured log for centralized logging pipelines
+        app.logger.error("payment_error: %s", json.dumps(event))
+        # Datadog metric (DogStatsD)
+        if dd_statsd is not None:
+            try:
+                dd_statsd.increment(
+                    "payment_error.count",
+                    tags=[f"endpoint:{endpoint}", f"status:{status}"],
+                )
+            except Exception:
+                pass
+        # Prometheus counter
+        if payment_errors_total is not None:
+            try:
+                payment_errors_total.labels(
+                    endpoint=endpoint, status=str(status)
+                ).inc()
+            except Exception:
+                pass
+        # Sentry event
+        if sentry_sdk is not None:
+            try:
+                sentry_sdk.capture_event(
+                    {
+                        "message": "payment_error",
+                        "level": "error",
+                        "extra": event,
+                    }
+                )
+            except Exception:
+                pass
+
+    # Expose Prometheus metrics endpoint if client is available
+    @app.route("/metrics", methods=["GET"])
+    def metrics():
+        if generate_latest is None:
+            return "metrics unavailable", 404
+        return app.response_class(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+
     # Disabling unused-variable for lines with route decorated functions
     # as pylint thinks they are unused
     # pylint: disable=unused-variable
@@ -218,10 +315,24 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting payment: user is not authenticated.')
+            # Count request for metrics even if unauthorized
+            try:
+                if payment_requests_total is not None:
+                    payment_requests_total.labels(endpoint='payment').inc()
+            except Exception:
+                pass
+            # Emit structured error
+            emit_payment_error(endpoint='payment', status=401, user_id='unknown')
             if _wants_json():
                 return jsonify({'error': 'not authenticated'}), 401
             return abort(401)
         try:
+            # Count request
+            try:
+                if payment_requests_total is not None:
+                    payment_requests_total.labels(endpoint='payment').inc()
+            except Exception:
+                pass
             account_id = decode_token(token)['acct']
             recipient = request.form['account_num']
             if recipient == 'add':
@@ -257,6 +368,11 @@ def create_app():
             status = http_err.response.status_code if http_err.response is not None else 500
             body = http_err.response.text if http_err.response is not None else 'Payment failed'
             app.logger.error('Error submitting payment: %s', str(http_err))
+            # Emit structured error
+            try:
+                emit_payment_error(endpoint='payment', status=status, user_id=account_id)
+            except Exception:
+                pass
             if _wants_json():
                 return jsonify({'error': body}), status
             msg = 'Payment failed: {}'.format(body)
@@ -267,10 +383,20 @@ def create_app():
         except requests.exceptions.RequestException as err:
             # Network or other request errors
             app.logger.error('Error submitting payment: %s', str(err))
+            # Emit structured error
+            try:
+                emit_payment_error(endpoint='payment', status=502, user_id=decode_token(token).get('acct', 'unknown'))
+            except Exception:
+                pass
             if _wants_json():
                 return jsonify({'error': 'Payment request error'}), 502
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
+            # Emit structured error
+            try:
+                emit_payment_error(endpoint='payment', status=400, user_id=decode_token(token).get('acct', 'unknown'))
+            except Exception:
+                pass
             if _wants_json():
                 return jsonify({'error': f'Payment failed: {user_input} is not a valid number'}), 400
 
@@ -297,10 +423,24 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting deposit: user is not authenticated.')
+            # Count request for metrics even if unauthorized
+            try:
+                if payment_requests_total is not None:
+                    payment_requests_total.labels(endpoint='deposit').inc()
+            except Exception:
+                pass
+            # Emit structured error
+            emit_payment_error(endpoint='deposit', status=401, user_id='unknown')
             if _wants_json():
                 return jsonify({'error': 'not authenticated'}), 401
             return abort(401)
         try:
+            # Count request
+            try:
+                if payment_requests_total is not None:
+                    payment_requests_total.labels(endpoint='deposit').inc()
+            except Exception:
+                pass
             # get account id from token
             account_id = decode_token(token)['acct']
             if request.form['account'] == 'add':
@@ -342,6 +482,11 @@ def create_app():
             status = http_err.response.status_code if http_err.response is not None else 500
             body = http_err.response.text if http_err.response is not None else 'Deposit failed'
             app.logger.error('Error submitting deposit: %s', str(http_err))
+            # Emit structured error
+            try:
+                emit_payment_error(endpoint='deposit', status=status, user_id=account_id)
+            except Exception:
+                pass
             if _wants_json():
                 return jsonify({'error': body}), status
             msg = 'Deposit failed: {}'.format(body)
@@ -351,6 +496,11 @@ def create_app():
                                     _scheme=app.config['SCHEME']))
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            # Emit structured error
+            try:
+                emit_payment_error(endpoint='deposit', status=502, user_id=decode_token(token).get('acct', 'unknown'))
+            except Exception:
+                pass
             if _wants_json():
                 return jsonify({'error': 'Deposit request error'}), 502
 
