@@ -16,6 +16,7 @@ package anthos.samples.bankofanthos.transactionhistory;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Date;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
@@ -42,6 +43,38 @@ public interface TransactionRepository
     LinkedList<Transaction> findForAccount(String accountNum,
                                            String routingNum,
                                            Pageable pager);
+
+    @Query("SELECT t FROM Transaction t "
+        + " WHERE (t.fromAccountNum=?1 AND t.fromRoutingNum=?2) "
+        + "   OR (t.toAccountNum=?1 AND t.toRouting);
+
+    @Query("SELECT t FROM Transaction t "
+        + " WHERE ((t.fromAccountNum=?1 AND t.fromRoutingNum=?2) "
+        + "   OR (t.toAccountNum=?1 AND t.toRoutingNum=?2)) "
+        + "   AND t.timestamp BETWEEN ?3 AND ?4 "
+        + " ORDER BY t.timestamp DESC")
+    List<Transaction> findForAccountBetween(String accountNum,
+                                            String routingNum,
+                                            Date from,
+                                            Date to);
+
+    @Query("SELECT t FROM Transaction t "
+        + " WHERE ((t.fromAccountNum=?1 AND t.fromRoutingNum=?2) "
+        + "   OR (t.toAccountNum=?1 AND t.toRoutingNum=?2)) "
+        + "   AND t.timestamp >= ?3 "
+        + " ORDER BY t.timestamp DESC")
+    List<Transaction> findForAccountFrom(String accountNum,
+                                         String routingNum,
+                                         Date from);
+
+    @Query("SELECT t FROM Transaction t "
+        + " WHERE ((t.fromAccountNum=?1 AND t.fromRoutingNum=?2) "
+        + "   OR (t.toAccountNum=?1 AND t.toRoutingNum=?2)) "
+        + "   AND t.timestamp <= ?3 "
+        + " ORDER BY t.timestamp DESC")
+    List<Transaction> findForAccountTo(String accountNum,
+                                       String routingNum,
+                                       Date to);
 
     @Query("SELECT t FROM Transaction t "
         + " WHERE t.transactionId > ?1 ORDER BY t.transactionId ASC")
