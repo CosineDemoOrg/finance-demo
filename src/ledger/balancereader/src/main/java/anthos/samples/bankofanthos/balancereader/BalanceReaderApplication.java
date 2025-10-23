@@ -28,6 +28,7 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -36,6 +37,9 @@ import org.springframework.context.annotation.Bean;
  * Microservice to track the bank balance for each user account.
  */
 @SpringBootApplication(exclude = ZipkinAutoConfiguration.class)
+@EntityScan(basePackages = {
+    "anthos.samples.bankofanthos.ledger.common"
+})
 public class BalanceReaderApplication {
 
     private static final Logger LOGGER =

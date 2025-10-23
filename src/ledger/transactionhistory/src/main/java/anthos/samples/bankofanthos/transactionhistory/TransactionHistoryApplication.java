@@ -28,14 +28,18 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.Bean;
 
 /**
  * Entry point for the TransactionHistory Spring Boot application.
  *
- * Microservice to track the transaction history for each bank account.
+ * Microservice to track the transaction history for the authenticated user.
  */
 @SpringBootApplication(exclude = ZipkinAutoConfiguration.class)
+@EntityScan(basePackages = {
+    "anthos.samples.bankofanthos.ledger.common"
+})
 public class TransactionHistoryApplication {
 
     private static final Logger LOGGER =
