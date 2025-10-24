@@ -19,6 +19,7 @@ package anthos.samples.bankofanthos.transactionhistory;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import anthos.samples.bankofanthos.ledger.common.Transaction;
 import java.util.Deque;
 import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.LogManager;
