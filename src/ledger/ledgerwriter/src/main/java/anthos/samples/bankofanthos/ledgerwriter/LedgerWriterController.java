@@ -127,10 +127,9 @@ public final class LedgerWriterController {
      * @param bearerToken  HTTP request 'Authorization' header
      * @param transaction  transaction to submit
      *
-     * @return  HTTP Status 200 if transaction was successfully submitted
+     * @return  HTTP Status 201 if transaction was successfully submitted
      */
     @PostMapping(value = "/transactions", consumes = "application/json")
-    @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<?> addTransaction(
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody Transaction transaction) {
