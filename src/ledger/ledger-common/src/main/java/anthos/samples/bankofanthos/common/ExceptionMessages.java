@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package anthos.samples.bankofanthos.ledgerwriter;
+package anthos.samples.bankofanthos.common;
 
 /**
- * Class for all exception messages used in ledgerwriter.
+ * Class for all exception messages used by ledger services.
  *
  */
 public class ExceptionMessages {
