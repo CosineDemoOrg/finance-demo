@@ -28,8 +28,8 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +38,7 @@ import org.springframework.context.annotation.Configuration;
 public class JWTVerifierGenerator {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(JWTVerifierGenerator.class);
+        LoggerFactory.getLogger(JWTVerifierGenerator.class);
 
     @Bean (name = "verifier")
     public JWTVerifier generateJWTVerifier(

@@ -16,8 +16,8 @@
 
 package anthos.samples.bankofanthos.transactionhistory;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -42,7 +42,7 @@ interface LedgerReaderCallback {
 public final class LedgerReader {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(LedgerReader.class);
+        LoggerFactory.getLogger(LedgerReader.class);
     private static final long STARTING_TRANSACTION_ID = -1;
 
     @Autowired

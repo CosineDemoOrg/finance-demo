@@ -16,8 +16,8 @@
 
 package anthos.samples.bankofanthos.ledgermonolith;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.regex.Pattern;
@@ -46,7 +46,7 @@ public class TransactionValidator {
     private static final Pattern ROUTE_REGEX = Pattern.compile("^[0-9]{9}$");
 
     private static final Logger LOGGER =
-        LogManager.getLogger(TransactionValidator.class);
+        LoggerFactory.getLogger(TransactionValidator.class);
 
     /**
      *   - Ensure sender is the same user authenticated by auth token

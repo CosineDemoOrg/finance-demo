@@ -19,8 +19,8 @@ package anthos.samples.bankofanthos.balancereader;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,7 +39,7 @@ import java.util.Base64;
 public class JWTVerifierGenerator {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(JWTVerifierGenerator.class);
+        LoggerFactory.getLogger(JWTVerifierGenerator.class);
 
     @Bean (name = "verifier")
     public JWTVerifier generateJWTVerifier(

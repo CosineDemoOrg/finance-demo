@@ -16,8 +16,8 @@
 
 package anthos.samples.bankofanthos.balancereader;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +37,7 @@ import com.google.common.cache.LoadingCache;
 public class BalanceCache {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(BalanceCache.class);
+        LoggerFactory.getLogger(BalanceCache.class);
 
     @Autowired
     private TransactionRepository dbRepo;

@@ -16,9 +16,8 @@
 
 package anthos.samples.bankofanthos.ledgermonolith;
 
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -33,7 +32,7 @@ import org.springframework.web.client.RestTemplate;
 public class LedgerMonolithApplication {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(LedgerMonolithApplication.class);
+        LoggerFactory.getLogger(LedgerMonolithApplication.class);
 
     private static final String[] EXPECTED_ENV_VARS = {
         "VERSION",
@@ -50,15 +49,13 @@ public class LedgerMonolithApplication {
         for (String v : EXPECTED_ENV_VARS) {
             String value = System.getenv(v);
             if (value == null) {
-                LOGGER.fatal(String.format(
+                LOGGER.error(String.format(
                     "%s environment variable not set", v));
                 System.exit(1);
             }
         }
         SpringApplication.run(LedgerMonolithApplication.class, args);
-        LOGGER.log(Level.forName("STARTUP", Level.FATAL.intLevel()),
-            String.format("Started LedgerMonolith service. Log level is: %s",
-                LOGGER.getLevel().toString()));
+        LOGGER.info("Started LedgerMonolith service.");
     }
 
     @Bean

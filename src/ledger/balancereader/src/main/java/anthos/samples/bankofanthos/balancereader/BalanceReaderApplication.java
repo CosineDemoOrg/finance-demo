@@ -22,9 +22,8 @@ import io.micrometer.stackdriver.StackdriverMeterRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.PreDestroy;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.autoconfigure.tracing.zipkin.ZipkinAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -39,7 +38,7 @@ import org.springframework.context.annotation.Bean;
 public class BalanceReaderApplication {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(BalanceReaderApplication.class);
+        LoggerFactory.getLogger(BalanceReaderApplication.class);
 
     private static final String[] EXPECTED_ENV_VARS = {
         "VERSION",
@@ -56,16 +55,13 @@ public class BalanceReaderApplication {
         for (String v : EXPECTED_ENV_VARS) {
             String value = System.getenv(v);
             if (value == null) {
-                LOGGER.fatal(String.format(
+                LOGGER.error(String.format(
                     "%s environment variable not set", v));
                 System.exit(1);
             }
         }
         SpringApplication.run(BalanceReaderApplication.class, args);
-        LOGGER.log(Level.forName("STARTUP", Level.FATAL.intLevel()),
-            String.format("Started BalanceReader service. Log level is: %s",
-                LOGGER.getLevel().toString()));
-
+        LOGGER.info("Started BalanceReader service.");
     }
 
     @PreDestroy

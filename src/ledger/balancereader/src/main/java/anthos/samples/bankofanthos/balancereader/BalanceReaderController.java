@@ -24,8 +24,8 @@ import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
 import java.util.concurrent.ExecutionException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -43,7 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public final class BalanceReaderController {
 
     private static final Logger LOGGER =
-        LogManager.getLogger(BalanceReaderController.class);
+        LoggerFactory.getLogger(BalanceReaderController.class);
 
     @Autowired
     private TransactionRepository dbRepo;
