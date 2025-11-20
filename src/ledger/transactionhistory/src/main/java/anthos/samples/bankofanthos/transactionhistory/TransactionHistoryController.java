@@ -23,18 +23,27 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Deque;
+import java.util.LinkedList;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -61,6 +70,7 @@ public final class TransactionHistoryController {
     private JWTVerifier verifier;
     private LedgerReader ledgerReader;
     private LoadingCache<String, Deque<Transaction>> cache;
+    private String localRoutingNum;
 
     /**
      * Constructor.
@@ -83,6 +93,7 @@ public final class TransactionHistoryController {
         GuavaCacheMetrics.monitor(meterRegistry, this.cache, "Guava");
         // Initialize transaction processor.
         this.ledgerReader = reader;
+        this.localRoutingNum = localRoutingNum;
         LOGGER.debug("Initialized transaction processor");
         this.ledgerReader.startWithCallback(transaction -> {
             final String fromId = transaction.getFromAccountNum();
@@ -205,6 +216,98 @@ public final class TransactionHistoryController {
             LOGGER.error("Cache error");
             return new ResponseEntity<>("cache error",
                                               HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Export transactions as CSV with optional from/to date filters (YYYY-MM-DD).
+     *
+     * The currently authenticated user must be allowed to access the account.
+     * @param bearerToken  HTTP request 'Authorization' header
+     * @param accountId    the account to export transactions for.
+     * @param from         optional start date (inclusive) in YYYY-MM-DD
+     * @param to           optional end date (inclusive) in YYYY-MM-DD
+     * @return             CSV content of transactions.
+     */
+    @GetMapping(value = "/transactions/{accountId}/export", produces = "text/csv")
+    public ResponseEntity<?> exportTransactionsCsv(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(name = "from", required = false) String from,
+            @RequestParam(name = "to", required = false) String to) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to export transactions: not authorized");
+                return new ResponseEntity<>("not authorized",
+                        HttpStatus.UNAUTHORIZED);
+            }
+
+            // Fetch full history from DB (unpaged) and filter by account/routing
+            LinkedList<Transaction> all =
+                    dbRepo.findForAccount(accountId, localRoutingNum, Pageable.unpaged());
+
+            // Parse optional date filters
+            Date fromDate = null;
+            Date toDateExclusive = null; // exclusive upper bound (start of next day)
+            ZoneId zone = ZoneId.systemDefault();
+            if (from != null && !from.isEmpty()) {
+                LocalDate fromLocal = LocalDate.parse(from);
+                fromDate = Date.from(fromLocal.atStartOfDay(zone).toInstant());
+            }
+            if (to != null && !to.isEmpty()) {
+                LocalDate toLocal = LocalDate.parse(to);
+                // make exclusive bound at start of day + 1
+                toDateExclusive = Date.from(toLocal.plusDays(1).atStartOfDay(zone).toInstant());
+            }
+
+            // Filter by date if provided
+            final Date fDate = fromDate;
+            final Date tDateEx = toDateExclusive;
+            LinkedList<Transaction> filtered = all.stream()
+                    .filter(t -> {
+                        Date ts = t.getTimestamp();
+                        if (fDate != null && ts.before(fDate)) {
+                            return false;
+                        }
+                        if (tDateEx != null && !ts.before(tDateEx)) { // ts >= exclusive upper bound
+                            return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toCollection(LinkedList::new));
+
+            // Build CSV
+            StringBuilder sb = new StringBuilder();
+            sb.append("transactionId,timestamp,fromAccountNum,fromRoutingNum,toAccountNum,toRoutingNum,amount\n");
+            for (Transaction t : filtered) {
+                sb.append(t.getTransactionId()).append(",");
+                sb.append(t.getTimestamp().toInstant().toString()).append(",");
+                sb.append(t.getFromAccountNum()).append(",");
+                sb.append(t.getFromRoutingNum()).append(",");
+                sb.append(t.getToAccountNum()).append(",");
+                sb.append(t.getToRoutingNum()).append(",");
+                sb.append(t.getAmount()).append("\n");
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"transactions_" + accountId + ".csv\"");
+            // ResponseEntity with headers and body
+            return new ResponseEntity<>(sb.toString(), headers, HttpStatus.OK);
+
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to export transactions: not authorized");
+            return new ResponseEntity<>("not authorized",
+                    HttpStatus.UNAUTHORIZED);
+        } catch (Exception e) {
+            LOGGER.error("Failed to export transactions", e);
+            return new ResponseEntity<>("export error",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
