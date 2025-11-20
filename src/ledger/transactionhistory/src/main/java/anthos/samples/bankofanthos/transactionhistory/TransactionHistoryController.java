@@ -23,18 +23,24 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Deque;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -178,7 +184,7 @@ public final class TransactionHistoryController {
                 LOGGER.error("Failed to retrieve account transactions: "
                     + "not authorized");
                 return new ResponseEntity<>("not authorized",
-                                                  HttpStatus.UNAUTHORIZED);
+                                              HttpStatus.UNAUTHORIZED);
             }
 
             // Load from cache
@@ -207,4 +213,93 @@ public final class TransactionHistoryController {
                                               HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    /**
+     * CSV export endpoint for a user's transactions.
+     *
+     * Optional 'from' and 'to' query parameters filter by timestamp (ISO-8601).
+     * Example: /transactions/{accountId}/csv?from=2023-01-01T00:00:00Z&to=2023-12-31T23:59:59Z
+     */
+    @GetMapping(value = "/transactions/{accountId}/csv", produces = "text/csv")
+    public ResponseEntity<?> exportTransactionsCsv(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(name = "from", required = false) String fromParam,
+            @RequestParam(name = "to", required = false) String toParam) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to export account transactions: not authorized");
+                return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+            }
+
+            Deque<Transaction> historyList = cache.get(accountId);
+
+            Instant fromInstant = null;
+            Instant toInstant = null;
+            try {
+                if (fromParam != null && !fromParam.isEmpty()) {
+                    fromInstant = Instant.parse(fromParam);
+                }
+                if (toParam != null && !toParam.isEmpty()) {
+                    toInstant = Instant.parse(toParam);
+                }
+            } catch (DateTimeParseException e) {
+                LOGGER.error("Invalid date parameters");
+                return new ResponseEntity<>("invalid date parameters", HttpStatus.BAD_REQUEST);
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("timestamp,fromAccountNum,fromRoutingNum,toAccountNum,toRoutingNum,amount\n");
+            for (Transaction t : historyList) {
+                Date ts = t.getTimestamp();
+                Instant txnInstant = (ts != null) ? ts.toInstant() : null;
+
+                boolean withinFrom = (fromInstant == null) || (txnInstant != null && !txnInstant.isBefore(fromInstant));
+                boolean withinTo = (toInstant == null) || (txnInstant != null && !txnInstant.isAfter(toInstant));
+
+                if (withinFrom && withinTo) {
+                    sb.append(ts != null ? ts.toInstant().toString() : "")
+                      .append(",")
+                      .append(t.getFromAccountNum())
+                      .append(",")
+                      .append(t.getFromRoutingNum())
+                      .append(",")
+                      .append(t.getToAccountNum())
+                      .append(",")
+                      .append(t.getToRoutingNum())
+                      .append(",")
+                      .append(t.getAmount())
+                      .append("\n");
+                }
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.valueOf("text/csv"));
+            headers.set("Content-Disposition", "attachment; filename=\"transactions-" + accountId + ".csv\"");
+
+            // Set artificial extra latency if configured
+            if (extraLatencyMillis != null) {
+                try {
+                    Thread.sleep(extraLatencyMillis);
+                } catch (InterruptedException e) {
+                    // Continue without delay
+                }
+            }
+
+            return new ResponseEntity<>(sb.toString(), headers, HttpStatus.OK);
+
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to export account transactions: not authorized");
+            return new ResponseEntity<>("not authorized", HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+}
 }
