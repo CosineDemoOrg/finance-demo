@@ -45,6 +45,14 @@ from opentelemetry.instrumentation.jinja2 import Jinja2Instrumentor
 from api_call import ApiCall, ApiRequest
 from traced_thread_pool_executor import TracedThreadPoolExecutor
 
+
+class TransactionError(Exception):
+    """Exception raised when a transaction submission fails."""
+
+    def __init__(self, status_code, message):
+        super().__init__(message)
+        self.status_code = status_code
+
 # Local constants
 BALANCE_NAME = "balance"
 CONTACTS_NAME = "contacts"
@@ -200,6 +208,17 @@ def create_app():
             elif trans['fromAccountNum'] == account_id:
                 trans['accountLabel'] = contact_map.get(trans['toAccountNum'])
 
+    def _wants_json_response():
+        """Determine if the client prefers a JSON response over HTML."""
+        best = request.accept_mimetypes.best_match(
+            ['application/json', 'text/html']
+        )
+        return (
+            best == 'application/json'
+            and request.accept_mimetypes[best]
+            > request.accept_mimetypes['text/html']
+        )
+
     @app.route('/payment', methods=['POST'])
     def payment():
         """
@@ -214,6 +233,8 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting payment: user is not authenticated.')
+            if _wants_json_response():
+                return jsonify({'error': 'user is not authenticated'}), 401
             return abort(401)
         try:
             account_id = decode_token(token)['acct']
@@ -238,24 +259,36 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Payment initiated successfully.')
+            if _wants_json_response():
+                return jsonify({'message': 'Payment successful'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Payment successful',
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
-        except requests.exceptions.RequestException as err:
-            app.logger.error('Error submitting payment: %s', str(err))
-        except UserWarning as warn:
-            app.logger.error('Error submitting payment: %s', str(warn))
-            msg = 'Payment failed: {}'.format(str(warn))
+        except TransactionError as terr:
+            app.logger.error('Error submitting payment: %s', str(terr))
+            msg = 'Payment failed: {}'.format(str(terr))
+            if _wants_json_response():
+                return jsonify({'error': str(terr)}), terr.status_code
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
+        except requests.exceptions.RequestException as err:
+            app.logger.error('Error submitting payment: %s', str(err))
+            if _wants_json_response():
+                return jsonify({'error': 'Upstream service error'}), 502
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
             msg = 'Payment failed: {} is not a valid number'.format(user_input)
+            if _wants_json_response():
+                return jsonify({'error': msg}), 400
+            return redirect(url_for('home',
+                                    msg=msg,
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
 
         return redirect(url_for('home',
                                 msg='Payment failed',
@@ -276,6 +309,8 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting deposit: user is not authenticated.')
+            if _wants_json_response():
+                return jsonify({'error': 'user is not authenticated'}), 401
             return abort(401)
         try:
             # get account id from token
@@ -297,25 +332,50 @@ def create_app():
                 external_account_num = account_details['account_num']
                 external_routing_num = account_details['routing_num']
 
+            amount_str = request.form['amount']
             transaction_data = {"fromAccountNum": external_account_num,
                                 "fromRoutingNum": external_routing_num,
                                 "toAccountNum": account_id,
                                 "toRoutingNum": app.config['LOCAL_ROUTING'],
-                                "amount": int(Decimal(request.form['amount']) * 100),
+                                "amount": int(Decimal(amount_str) * 100),
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
+            if _wants_json_response():
+                return jsonify({'message': 'Deposit successful'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Deposit successful',
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
+        except TransactionError as terr:
+            app.logger.error('Error submitting deposit: %s', str(terr))
+            msg = 'Deposit failed: {}'.format(str(terr))
+            if _wants_json_response():
+                return jsonify({'error': str(terr)}), terr.status_code
+            return redirect(url_for('home',
+                                    msg=msg,
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            if _wants_json_response():
+                return jsonify({'error': 'Upstream service error'}), 502
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
             msg = 'Deposit failed: {}'.format(str(warn))
+            if _wants_json_response():
+                return jsonify({'error': msg}), 400
+            return redirect(url_for('home',
+                                    msg=msg,
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
+        except (ValueError, DecimalException) as num_err:
+            app.logger.error('Error submitting deposit: %s', str(num_err))
+            msg = 'Deposit failed: {} is not a valid number'.format(amount_str)
+            if _wants_json_response():
+                return jsonify({'error': msg}), 400
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
@@ -336,9 +396,10 @@ def create_app():
                              headers=hed,
                              timeout=app.config['BACKEND_TIMEOUT'])
         try:
-            resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
+            # Raise on HTTP Status code 4XX or 5XX and propagate status
+            resp.raise_for_status()
         except requests.exceptions.HTTPError as http_request_err:
-            raise UserWarning(resp.text) from http_request_err
+            raise TransactionError(resp.status_code, resp.text) from http_request_err
         # Short delay to allow the transaction to propagate to balancereader
         # and transaction-history
         sleep(0.25)
