@@ -244,23 +244,21 @@ def create_app():
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
-        except requests.exceptions.RequestException as err:
+        except HTTPError as err:
             app.logger.error('Error submitting payment: %s', str(err))
+            status = err.response.status_code if err.response is not None else 502
+            return make_response('Payment failed', status)
+        except RequestException as err:
+            app.logger.error('Error submitting payment: %s', str(err))
+            return make_response('Payment failed', 502)
         except UserWarning as warn:
             app.logger.error('Error submitting payment: %s', str(warn))
             msg = 'Payment failed: {}'.format(str(warn))
-            return redirect(url_for('home',
-                                    msg=msg,
-                                    _external=True,
-                                    _scheme=app.config['SCHEME']))
+            return make_response(msg, 400)
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
             msg = 'Payment failed: {} is not a valid number'.format(user_input)
-
-        return redirect(url_for('home',
-                                msg='Payment failed',
-                                _external=True,
-                                _scheme=app.config['SCHEME']))
+            return make_response(msg, 400)
 
     @app.route('/deposit', methods=['POST'])
     def deposit():
@@ -311,20 +309,21 @@ def create_app():
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
-        except requests.exceptions.RequestException as err:
+        except HTTPError as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            status = err.response.status_code if err.response is not None else 502
+            return make_response('Deposit failed', status)
+        except RequestException as err:
+            app.logger.error('Error submitting deposit: %s', str(err))
+            return make_response('Deposit failed', 502)
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
             msg = 'Deposit failed: {}'.format(str(warn))
-            return redirect(url_for('home',
-                                    msg=msg,
-                                    _external=True,
-                                    _scheme=app.config['SCHEME']))
-
-        return redirect(url_for('home',
-                                msg='Deposit failed',
-                                _external=True,
-                                _scheme=app.config['SCHEME']))
+            return make_response(msg, 400)
+        except (ValueError, DecimalException) as num_err:
+            app.logger.error('Error submitting deposit: %s', str(num_err))
+            msg = 'Deposit failed: {} is not a valid number'.format(request.form['amount'])
+            return make_response(msg, 400)
 
     def _submit_transaction(transaction_data):
         app.logger.debug('Submitting transaction.')
@@ -335,10 +334,8 @@ def create_app():
                              data=jsonify(transaction_data).data,
                              headers=hed,
                              timeout=app.config['BACKEND_TIMEOUT'])
-        try:
-            resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
-        except requests.exceptions.HTTPError as http_request_err:
-            raise UserWarning(resp.text) from http_request_err
+        # Raise on HTTP Status code 4XX or 5XX so callers can propagate status.
+        resp.raise_for_status()
         # Short delay to allow the transaction to propagate to balancereader
         # and transaction-history
         sleep(0.25)
