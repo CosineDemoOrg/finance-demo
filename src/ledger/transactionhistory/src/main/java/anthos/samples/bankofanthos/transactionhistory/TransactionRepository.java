@@ -14,6 +14,8 @@
 
 package anthos.samples.bankofanthos.transactionhistory;
 
+import anthos.samples.bankofanthos.ledger.Transaction;
+
 import java.util.LinkedList;
 import java.util.List;
 
