@@ -23,18 +23,27 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Deque;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -61,6 +70,7 @@ public final class TransactionHistoryController {
     private JWTVerifier verifier;
     private LedgerReader ledgerReader;
     private LoadingCache<String, Deque<Transaction>> cache;
+    private String localRoutingNum;
 
     /**
      * Constructor.
@@ -83,6 +93,7 @@ public final class TransactionHistoryController {
         GuavaCacheMetrics.monitor(meterRegistry, this.cache, "Guava");
         // Initialize transaction processor.
         this.ledgerReader = reader;
+        this.localRoutingNum = localRoutingNum;
         LOGGER.debug("Initialized transaction processor");
         this.ledgerReader.startWithCallback(transaction -> {
             final String fromId = transaction.getFromAccountNum();
@@ -206,5 +217,111 @@ public final class TransactionHistoryController {
             return new ResponseEntity<>("cache error",
                                               HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Export a user's transaction history as CSV with optional date filters.
+     *
+     * The currently authenticated user must be allowed to access the account.
+     * @param bearerToken  HTTP request 'Authorization' header
+     * @param accountId    the account to get transactions for.
+     * @param fromDate     optional start date (inclusive) in ISO-8601 format (yyyy-MM-dd)
+     * @param toDate       optional end date (inclusive) in ISO-8601 format (yyyy-MM-dd)
+     * @return             CSV content for the account's transactions.
+     */
+    @GetMapping(value = "/transactions/{accountId}/export",
+            produces = "text/csv")
+    public ResponseEntity<String> exportTransactionsCsv(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(name = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            Date fromDate,
+            @RequestParam(name = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            Date toDate) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to export account transactions: "
+                    + "not authorized");
+                return new ResponseEntity<>("not authorized",
+                                              HttpStatus.UNAUTHORIZED);
+            }
+
+            // Make the end date inclusive by moving it to the end of the day.
+            if (toDate != null) {
+                Calendar calendar = Calendar.getInstance();
+                calendar.setTime(toDate);
+                calendar.add(Calendar.DATE, 1);
+                toDate = calendar.getTime();
+            }
+
+            List<Transaction> transactions =
+                dbRepo.findForAccountInRange(accountId,
+                                             localRoutingNum,
+                                             fromDate,
+                                             toDate);
+
+            String csv = toCsv(transactions);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.TEXT_PLAIN);
+            headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"transactions-" + accountId + ".csv\"");
+
+            return new ResponseEntity<>(csv, headers, HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to export account transactions: "
+                + "not authorized");
+            return new ResponseEntity<>("not authorized",
+                                              HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    /**
+     * Serialize transactions to CSV.
+     */
+    private String toCsv(List<Transaction> transactions) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("transactionId,timestamp,fromAccountNum,fromRoutingNum,")
+               .append("toAccountNum,toRoutingNum,amount\n");
+
+        DateFormat dateFormat =
+            new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+
+        for (Transaction t : transactions) {
+            builder.append(t.getTransactionId()).append(",");
+            builder.append(dateFormat.format(t.getTimestamp())).append(",");
+            builder.append(escapeCsv(t.getFromAccountNum())).append(",");
+            builder.append(escapeCsv(t.getFromRoutingNum())).append(",");
+            builder.append(escapeCsv(t.getToAccountNum())).append(",");
+            builder.append(escapeCsv(t.getToRoutingNum())).append(",");
+            builder.append(t.getAmount());
+            builder.append("\n");
+        }
+
+        return builder.toString();
+    }
+
+    /**
+     * Escape a value for inclusion in a CSV file.
+     */
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean hasSpecial =
+            value.contains(",") || value.contains("\"") || value.contains("\n")
+            || value.contains("\r");
+        if (!hasSpecial) {
+            return value;
+        }
+        String escaped = value.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
     }
 }

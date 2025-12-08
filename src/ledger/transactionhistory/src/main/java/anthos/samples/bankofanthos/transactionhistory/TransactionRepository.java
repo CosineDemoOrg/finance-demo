@@ -1,5 +1,6 @@
 // Copyright 2020 Google LLC
 //
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,12 +15,14 @@
 
 package anthos.samples.bankofanthos.transactionhistory;
 
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -46,4 +49,16 @@ public interface TransactionRepository
     @Query("SELECT t FROM Transaction t "
         + " WHERE t.transactionId > ?1 ORDER BY t.transactionId ASC")
     List<Transaction> findLatest(long latestTransaction);
+
+    @Query("SELECT t FROM Transaction t "
+        + " WHERE ((t.fromAccountNum = :accountNum AND t.fromRoutingNum = :routingNum) "
+        + "    OR (t.toAccountNum = :accountNum AND t.toRoutingNum = :routingNum)) "
+        + "   AND (:fromDate IS NULL OR t.timestamp >= :fromDate) "
+        + "   AND (:toDate IS NULL OR t.timestamp <= :toDate) "
+        + " ORDER BY t.timestamp DESC")
+    List<Transaction> findForAccountInRange(
+        @Param("accountNum") String accountNum,
+        @Param("routingNum") String routingNum,
+        @Param("fromDate") Date fromDate,
+        @Param("toDate") Date toDate);
 }
