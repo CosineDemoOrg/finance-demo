@@ -200,6 +200,16 @@ def create_app():
             elif trans['fromAccountNum'] == account_id:
                 trans['accountLabel'] = contact_map.get(trans['toAccountNum'])
 
+    def client_wants_json():
+        """
+        Determine whether the caller prefers a JSON response.
+
+        Used to distinguish between browser form posts (which expect
+        redirects/HTML) and API clients (which expect JSON + HTTP codes).
+        """
+        return request.accept_mimetypes.accept_json \
+            and not request.accept_mimetypes.accept_html
+
     @app.route('/payment', methods=['POST'])
     def payment():
         """
@@ -214,6 +224,8 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting payment: user is not authenticated.')
+            if client_wants_json():
+                return jsonify({'error': 'unauthorized'}), 401
             return abort(401)
         try:
             account_id = decode_token(token)['acct']
@@ -238,6 +250,8 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Payment initiated successfully.')
+            if client_wants_json():
+                return jsonify({'status': 'success'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Payment successful',
@@ -246,9 +260,15 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting payment: %s', str(err))
+            if client_wants_json():
+                return jsonify({'error': 'payment failed',
+                                'detail': str(err)}), 502
         except UserWarning as warn:
             app.logger.error('Error submitting payment: %s', str(warn))
             msg = 'Payment failed: {}'.format(str(warn))
+            if client_wants_json():
+                return jsonify({'error': 'payment failed',
+                                'detail': str(warn)}), 400
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
@@ -256,6 +276,9 @@ def create_app():
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
             msg = 'Payment failed: {} is not a valid number'.format(user_input)
+            if client_wants_json():
+                return jsonify({'error': 'payment failed',
+                                'detail': msg}), 400
 
         return redirect(url_for('home',
                                 msg='Payment failed',
@@ -276,6 +299,8 @@ def create_app():
         if not verify_token(token):
             # user isn't authenticated
             app.logger.error('Error submitting deposit: user is not authenticated.')
+            if client_wants_json():
+                return jsonify({'error': 'unauthorized'}), 401
             return abort(401)
         try:
             # get account id from token
@@ -305,6 +330,8 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
+            if client_wants_json():
+                return jsonify({'status': 'success'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Deposit successful',
@@ -313,9 +340,15 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            if client_wants_json():
+                return jsonify({'error': 'deposit failed',
+                                'detail': str(err)}), 502
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
             msg = 'Deposit failed: {}'.format(str(warn))
+            if client_wants_json():
+                return jsonify({'error': 'deposit failed',
+                                'detail': str(warn)}), 400
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
