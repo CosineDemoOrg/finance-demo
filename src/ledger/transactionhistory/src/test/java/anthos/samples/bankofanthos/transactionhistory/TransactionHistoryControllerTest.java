@@ -31,6 +31,7 @@ import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.lang.Nullable;
 import io.micrometer.stackdriver.StackdriverConfig;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.time.LocalDate;
 import java.util.Deque;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
@@ -213,6 +214,74 @@ class TransactionHistoryControllerTest {
         // When
         final ResponseEntity actualResult = transactionHistoryController
             .getTransactions(BEARER_TOKEN, AUTHED_ACCOUNT_NUM);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given the user is authenticated for the account, export CSV with HTTP Status 200")
+    void exportTransactionsCsvSucceedsWhenAccountMatchesAuthenticatedUser() throws Exception {
+        // Given
+        when(verifier.verify(TOKEN)).thenReturn(jwt);
+        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
+        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(transactions);
+
+        // When
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactionsCsv(BEARER_TOKEN, AUTHED_ACCOUNT_NUM, null, null);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given the user is authenticated but cannot access the account for CSV, return 401")
+    void exportTransactionsCsvFailsWhenAccountDoesNotMatchAuthenticatedUser() {
+        // Given
+        when(verifier.verify(TOKEN)).thenReturn(jwt);
+        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
+        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+
+        // When
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactionsCsv(BEARER_TOKEN, NON_AUTHED_ACCOUNT_NUM, null, null);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given the user is not authenticated for CSV, return 401")
+    void exportTransactionsCsvFailsWhenUserNotAuthenticated() {
+        // Given
+        when(verifier.verify(TOKEN)).thenThrow(JWTVerificationException.class);
+
+        // When
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactionsCsv(BEARER_TOKEN, AUTHED_ACCOUNT_NUM, null, null);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given the cache throws an error for an authenticated user for CSV, return 500")
+    void exportTransactionsCsvFailsWhenCacheThrowsError() throws Exception {
+        // Given
+        when(verifier.verify(TOKEN)).thenReturn(jwt);
+        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
+        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(cache.get(AUTHED_ACCOUNT_NUM)).thenThrow(ExecutionException.class);
+
+        // When
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactionsCsv(BEARER_TOKEN, AUTHED_ACCOUNT_NUM, null, null);
 
         // Then
         assertNotNull(actualResult);

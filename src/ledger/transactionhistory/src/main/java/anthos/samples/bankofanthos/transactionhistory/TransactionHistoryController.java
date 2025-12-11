@@ -23,18 +23,26 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -198,6 +206,121 @@ public final class TransactionHistoryController {
                     historyList, HttpStatus.OK);
         } catch (JWTVerificationException e) {
             LOGGER.error("Failed to retrieve account transactions: "
+                + "not authorized");
+            return new ResponseEntity<>("not authorized",
+                                              HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error",
+                                              HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Return the transaction history for the specified account as CSV.
+     *
+     * The currently authenticated user must be allowed to access the account.
+     * Optional fromDate/toDate filters can be provided as ISO dates (yyyy-MM-dd).
+     * @param bearerToken  HTTP request 'Authorization' header
+     * @param accountId    the account to get transactions for.
+     * @param fromDate     optional start date (inclusive), ISO format yyyy-MM-dd
+     * @param toDate       optional end date (inclusive), ISO format yyyy-MM-dd
+     * @return             CSV string of transactions for this account.
+     */
+    @GetMapping(value = "/transactions/{accountId}/csv",
+                produces = "text/csv")
+    public ResponseEntity<?> exportTransactionsCsv(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(name = "fromDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate toDate) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            // Check that the authenticated user can access this account.
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to retrieve account transactions CSV: "
+                    + "not authorized");
+                return new ResponseEntity<>("not authorized",
+                                                  HttpStatus.UNAUTHORIZED);
+            }
+
+            Deque<Transaction> historyList = cache.get(accountId);
+
+            LocalDate from = fromDate;
+            LocalDate to = toDate;
+            ZoneId zoneId = ZoneId.systemDefault();
+
+            Collection<Transaction> filtered = historyList.stream()
+                    .filter(t -> {
+                        if (from == null && to == null) {
+                            return true;
+                        }
+                        if (t.getTimestamp() == null) {
+                            return false;
+                        }
+                        LocalDate txDate = t.getTimestamp()
+                                .toInstant()
+                                .atZone(zoneId)
+                                .toLocalDate();
+                        if (from != null && txDate.isBefore(from)) {
+                            return false;
+                        }
+                        if (to != null && txDate.isAfter(to)) {
+                            return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+
+            // Set artificial extra latency.
+            LOGGER.debug("Setting artificial latency");
+            if (extraLatencyMillis != null) {
+                try {
+                    Thread.sleep(extraLatencyMillis);
+                } catch (InterruptedException e) {
+                    // Fake latency interrupted. Continue.
+                }
+            }
+
+            SimpleDateFormat formatter =
+                new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
+            StringBuilder csvBuilder = new StringBuilder();
+            csvBuilder.append("transactionId,fromAccountNum,fromRoutingNum,")
+                    .append("toAccountNum,toRoutingNum,amount,timestamp\n");
+
+            for (Transaction t : filtered) {
+                String timestampString = "";
+                if (t.getTimestamp() != null) {
+                    timestampString = formatter.format(t.getTimestamp());
+                }
+                csvBuilder.append(t.getTransactionId()).append(',')
+                        .append(t.getFromAccountNum()).append(',')
+                        .append(t.getFromRoutingNum()).append(',')
+                        .append(t.getToAccountNum()).append(',')
+                        .append(t.getToRoutingNum()).append(',')
+                        .append(t.getAmount()).append(',')
+                        .append(timestampString)
+                        .append('\n');
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("text/csv"));
+            headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"transactions.csv\"");
+
+            return new ResponseEntity<>(csvBuilder.toString(),
+                    headers,
+                    HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to retrieve account transactions CSV: "
                 + "not authorized");
             return new ResponseEntity<>("not authorized",
                                               HttpStatus.UNAUTHORIZED);
