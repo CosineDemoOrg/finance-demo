@@ -189,10 +189,15 @@ def create_app():
 
             full_name = '{} {}'.format(user['firstname'], user['lastname'])
             exp_time = datetime.utcnow() + timedelta(seconds=app.config['EXPIRY_SECONDS'])
+
+            # Determine default active organization for this user.
+            active_org_id = users_db.get_default_org_for_account(user['accountid'])
+
             payload = {
                 'user': username,
                 'acct': user['accountid'],
                 'name': full_name,
+                'active_org_id': active_org_id,
                 'iat': datetime.utcnow(),
                 'exp': exp_time,
             }
@@ -210,6 +215,178 @@ def create_app():
         except SQLAlchemyError as err:
             app.logger.error('Error logging in: %s', str(err))
             return 'failed to retrieve user information', 500
+
+    def _decode_token_from_header():
+        """Decode and verify JWT from Authorization header."""
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            raise PermissionError('missing bearer token')
+        token = auth_header.split(' ', 1)[1]
+        try:
+            claims = jwt.decode(
+                jwt=token,
+                key=app.config['PUBLIC_KEY'],
+                algorithms=['RS256'],
+            )
+        except jwt.exceptions.InvalidTokenError as err:
+            app.logger.error('Error validating token: %s', str(err))
+            raise PermissionError('invalid token') from err
+        return claims
+
+    def _require_membership(org_id, require_admin=False):
+        """Ensure the current user is a member of the org (and admin if required)."""
+        claims = _decode_token_from_header()
+        accountid = claims.get('acct')
+        if accountid is None:
+            raise PermissionError('missing account')
+        membership = users_db.get_membership(org_id, accountid)
+        if membership is None:
+            raise PermissionError('forbidden')
+        if require_admin and membership.get('role') != 'admin':
+            raise PermissionError('forbidden')
+        # Enforce that the active_org_id in the token matches the requested org.
+        active_org_id = claims.get('active_org_id')
+        if active_org_id is not None and int(active_org_id) != int(org_id):
+            raise PermissionError('active org mismatch')
+        return claims, membership
+
+    @app.route('/orgs', methods=['GET'])
+    def list_orgs():
+        """List organizations for the authenticated user."""
+        try:
+            claims = _decode_token_from_header()
+            memberships = users_db.get_memberships_for_account(claims['acct'])
+            return jsonify({'organizations': memberships}), 200
+        except PermissionError as err:
+            return str(err), 401
+        except SQLAlchemyError as err:
+            app.logger.error('Error listing orgs: %s', str(err))
+            return 'failed to list organizations', 500
+
+    @app.route('/orgs', methods=['POST'])
+    def create_org():
+        """Create an organization and assign caller as admin."""
+        try:
+            claims = _decode_token_from_header()
+            name = request.json.get('name')
+            if not name or not name.strip():
+                raise UserWarning('missing organization name')
+            org = users_db.create_organization(name.strip(), claims['acct'])
+            return jsonify(org), 201
+        except UserWarning as warn:
+            return str(warn), 400
+        except PermissionError as err:
+            return str(err), 401
+        except SQLAlchemyError as err:
+            app.logger.error('Error creating org: %s', str(err))
+            return 'failed to create organization', 500
+
+    @app.route('/orgs/<int:org_id>/memberships', methods=['POST'])
+    def add_membership():
+        """Invite/add a member to an organization (admin only)."""
+        try:
+            claims, _ = _require_membership(org_id, require_admin=True)
+            body = request.json or {}
+            accountid = body.get('accountid')
+            role = body.get('role', 'member')
+            if not accountid:
+                raise UserWarning('missing accountid')
+            users_db.add_membership(org_id, accountid, role)
+            return jsonify({}), 204
+        except UserWarning as warn:
+            return str(warn), 400
+        except PermissionError as err:
+            return str(err), 403
+        except SQLAlchemyError as err:
+            app.logger.error('Error adding membership: %s', str(err))
+            return 'failed to add membership', 500
+
+    @app.route('/orgs/<int:org_id>/memberships/<accountid>', methods=['DELETE'])
+    def remove_membership(org_id, accountid):
+        """Remove a member from an organization (admin only)."""
+        try:
+            _require_membership(org_id, require_admin=True)
+            users_db.remove_membership(org_id, accountid)
+            return jsonify({}), 204
+        except PermissionError as err:
+            return str(err), 403
+        except SQLAlchemyError as err:
+            app.logger.error('Error removing membership: %s', str(err))
+            return 'failed to remove membership', 500
+
+    @app.route('/orgs/<int:org_id>/items', methods=['GET'])
+    def list_items(org_id):
+        """List items scoped to the current organization."""
+        try:
+            _require_membership(org_id, require_admin=False)
+            items = users_db.list_items(org_id)
+            return jsonify({'items': items}), 200
+        except PermissionError as err:
+            return str(err), 403
+        except SQLAlchemyError as err:
+            app.logger.error('Error listing items: %s', str(err))
+            return 'failed to list items', 500
+
+    @app.route('/orgs/<int:org_id>/items', methods=['POST'])
+    def create_item(org_id):
+        """Create an item scoped to the current organization."""
+        try:
+            claims, _ = _require_membership(org_id, require_admin=False)
+            body = request.json or {}
+            name = body.get('name')
+            description = body.get('description')
+            if not name or not name.strip():
+                raise UserWarning('missing item name')
+            item = users_db.create_item(
+                org_id=org_id,
+                owner_accountid=claims['acct'],
+                name=name.strip(),
+                description=description,
+            )
+            return jsonify(item), 201
+        except UserWarning as warn:
+            return str(warn), 400
+        except PermissionError as err:
+            return str(err), 403
+        except SQLAlchemyError as err:
+            app.logger.error('Error creating item: %s', str(err))
+            return 'failed to create item', 500
+
+    @app.route('/active-org', methods=['POST'])
+    def switch_active_org():
+        """Switch the active organization for the current user.
+
+        Expects JSON body: {'org_id': <int>}
+        Returns a new JWT token with updated active_org_id.
+        """
+        try:
+            claims = _decode_token_from_header()
+            body = request.json or {}
+            org_id = body.get('org_id')
+            if org_id is None:
+                raise UserWarning('missing org_id')
+            # Ensure the user is a member of the org.
+            membership = users_db.get_membership(int(org_id), claims['acct'])
+            if membership is None:
+                raise PermissionError('forbidden')
+            exp_time = datetime.utcnow() + timedelta(seconds=app.config['EXPIRY_SECONDS'])
+            new_claims = {
+                'user': claims['user'],
+                'acct': claims['acct'],
+                'name': claims['name'],
+                'active_org_id': int(org_id),
+                'iat': datetime.utcnow(),
+                'exp': exp_time,
+            }
+            token = jwt.encode(new_claims, app.config['PRIVATE_KEY'], algorithm='RS256')
+            return jsonify({'token': token}), 200
+        except UserWarning as warn:
+            return str(warn), 400
+        except PermissionError as err:
+            return str(err), 403
+        except SQLAlchemyError as err:
+            app.logger.error('Error switching active org: %s', str(err))
+            return 'failed to switch organization', 500
 
     @atexit.register
     def _shutdown():

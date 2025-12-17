@@ -43,3 +43,30 @@ INSERT INTO contacts VALUES
 ('bob', 'External Bank', '9099791699', '808889588', 'true'),
 ('eve', 'External Bank', '9099791699', '808889588', 'true')
 ON CONFLICT DO NOTHING;
+
+
+-- Seed two example organizations and memberships.
+-- Org 1: Test Corp with testuser (admin) and alice (member)
+-- Org 2: Example LLC with bob (admin) and eve (member)
+
+INSERT INTO organizations (id, name)
+VALUES
+  (1, 'Test Corp'),
+  (2, 'Example LLC')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO organization_memberships (org_id, accountid, role)
+VALUES
+  (1, '1011226111', 'admin'),
+  (1, '1033623433', 'member'),
+  (2, '1055757655', 'admin'),
+  (2, '1077441377', 'member')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO items (org_id, owner_accountid, name, description)
+VALUES
+  (1, '1011226111', 'Corporate Card', 'Shared card for Test Corp expenses'),
+  (1, '1033623433', 'Marketing Budget', 'Marketing spend account'),
+  (2, '1055757655', 'Engineering Budget', 'Development and infrastructure'),
+  (2, '1077441377', 'Sales Budget', 'Sales travel and events')
+ON CONFLICT DO NOTHING;

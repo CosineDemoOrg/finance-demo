@@ -17,6 +17,20 @@
           </button>
           <div class="justify-content-end collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav">
+              {% if orgs %}
+              <li class="nav-item">
+                <form method="POST" action="/switch-org" class="form-inline">
+                  <label class="mr-2 text-muted small mb-0" for="org-select">Organization</label>
+                  <select id="org-select" name="org_id" class="custom-select custom-select-sm" onchange="this.form.submit()">
+                    {% for org in orgs %}
+                      <option value="{{ org.org_id }}" {% if active_org_id is not none and org.org_id == active_org_id %}selected{% endif %}>
+                        {{ org.org_name }}{% if org.role %} ({{ org.role }}){% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </form>
+              </li>
+              {% endif %}
               <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="accountDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                   <span>

@@ -44,3 +44,36 @@ CREATE TABLE IF NOT EXISTS contacts (
 
 CREATE INDEX IF NOT EXISTS idx_contacts_username ON contacts (username);
 
+
+
+CREATE TABLE IF NOT EXISTS organizations (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(128) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS organization_memberships (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  accountid CHAR(10) NOT NULL REFERENCES users(accountid) ON DELETE CASCADE,
+  role VARCHAR(16) NOT NULL,
+  UNIQUE (org_id, accountid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_org_memberships_org_id ON organization_memberships (org_id);
+CREATE INDEX IF NOT EXISTS idx_org_memberships_accountid ON organization_memberships (accountid);
+
+
+
+CREATE TABLE IF NOT EXISTS items (
+  id SERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  owner_accountid CHAR(10) NOT NULL REFERENCES users(accountid),
+  name VARCHAR(128) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_items_org_id ON items (org_id);
+CREATE INDEX IF NOT EXISTS idx_items_owner_accountid ON items (owner_accountid);
+
