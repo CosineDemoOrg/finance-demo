@@ -24,17 +24,23 @@ import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.micrometer.core.instrument.binder.cache.GuavaCacheMetrics;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.concurrent.ExecutionException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -153,6 +159,98 @@ public final class TransactionHistoryController {
                                               HttpStatus.INTERNAL_SERVER_ERROR);
         }
         return new ResponseEntity<>("ok", HttpStatus.OK);
+    }
+
+    /**
+     * Export a list of transactions for the specified account as CSV.
+     *
+     * The currently authenticated user must be allowed to access the account.
+     * Optional from/to date filters can be provided to limit the results.
+     *
+     * Dates should be provided in ISO-8601 format, for example:
+     *   2023-01-01T00:00:00Z
+     *
+     * @param bearerToken  HTTP request 'Authorization' header
+     * @param accountId    the account to get transactions for.
+     * @param from         optional start date (inclusive)
+     * @param to           optional end date (inclusive)
+     * @return             CSV export of transactions for this account.
+     */
+    @GetMapping(value = "/transactions/{accountId}/export", produces = "text/csv")
+    public ResponseEntity<?> exportTransactionsCsv(
+            @RequestHeader("Authorization") String bearerToken,
+            @PathVariable String accountId,
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date to) {
+
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            bearerToken = bearerToken.split("Bearer ")[1];
+        }
+        try {
+            DecodedJWT jwt = verifier.verify(bearerToken);
+            // Check that the authenticated user can access this account.
+            if (!accountId.equals(jwt.getClaim("acct").asString())) {
+                LOGGER.error("Failed to export account transactions: not authorized");
+                return new ResponseEntity<>("not authorized",
+                        HttpStatus.UNAUTHORIZED);
+            }
+
+            Deque<Transaction> historyList = cache.get(accountId);
+
+            StringBuilder csvBuilder = new StringBuilder();
+            csvBuilder.append("transactionId,fromAccountNum,fromRoutingNum,")
+                      .append("toAccountNum,toRoutingNum,amount,timestamp\n");
+
+            Iterator<Transaction> iterator = historyList.iterator();
+            while (iterator.hasNext()) {
+                Transaction t = iterator.next();
+                Date ts = t.getTimestamp();
+                if (from != null && ts.before(from)) {
+                    continue;
+                }
+                if (to != null && ts.after(to)) {
+                    continue;
+                }
+                csvBuilder.append(t.getTransactionId()).append(",")
+                          .append(escapeCsv(t.getFromAccountNum())).append(",")
+                          .append(escapeCsv(t.getFromRoutingNum())).append(",")
+                          .append(escapeCsv(t.getToAccountNum())).append(",")
+                          .append(escapeCsv(t.getToRoutingNum())).append(",")
+                          .append(t.getAmount()).append(",")
+                          .append(ts.getTime())
+                          .append("\n");
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(new MediaType("text", "csv"));
+            headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"transactions-" + accountId + ".csv\"");
+
+            return new ResponseEntity<>(csvBuilder.toString(), headers, HttpStatus.OK);
+        } catch (JWTVerificationException e) {
+            LOGGER.error("Failed to export account transactions: not authorized");
+            return new ResponseEntity<>("not authorized",
+                    HttpStatus.UNAUTHORIZED);
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            LOGGER.error("Cache error");
+            return new ResponseEntity<>("cache error",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean containsSpecial = value.contains(",") || value.contains("\"")
+                || value.contains("\n") || value.contains("\r");
+        if (!containsSpecial) {
+            return value;
+        }
+        String escaped = value.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
     }
 
     /**
