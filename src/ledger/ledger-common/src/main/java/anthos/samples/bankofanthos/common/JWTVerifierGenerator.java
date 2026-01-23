@@ -14,17 +14,11 @@
  * limitations under the License.
  */
 
-package anthos.samples.bankofanthos.balancereader;
+package anthos.samples.bankofanthos.common;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -34,6 +28,11 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class JWTVerifierGenerator {
@@ -41,7 +40,7 @@ public class JWTVerifierGenerator {
     private static final Logger LOGGER =
         LogManager.getLogger(JWTVerifierGenerator.class);
 
-    @Bean (name = "verifier")
+    @Bean(name = "verifier")
     public JWTVerifier generateJWTVerifier(
             @Value("${PUB_KEY_PATH}") final String publicKeyPath) {
         // load public key from file
@@ -74,5 +73,4 @@ public class JWTVerifierGenerator {
             super(message, e);
         }
     }
-
 }

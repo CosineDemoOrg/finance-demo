@@ -16,10 +16,12 @@
 
 package anthos.samples.bankofanthos.ledgerwriter;
 
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_WHEN_AUTHORIZATION_HEADER_NULL;
+import static anthos.samples.bankofanthos.common.ExceptionMessages.EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION;
+import static anthos.samples.bankofanthos.common.ExceptionMessages.EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE;
+import static anthos.samples.bankofanthos.common.ExceptionMessages.EXCEPTION_MESSAGE_WHEN_AUTHORIZATION_HEADER_NULL;
 
+import anthos.samples.bankofanthos.common.Transaction;
+import anthos.samples.bankofanthos.common.TransactionValidator;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
