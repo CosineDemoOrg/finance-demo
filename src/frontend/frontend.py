@@ -238,17 +238,34 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Payment initiated successfully.')
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': 'Payment successful'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Payment successful',
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
+        except requests.exceptions.HTTPError as http_err:
+            app.logger.error('Error submitting payment: %s', str(http_err))
+            status_code = http_err.response.status_code if http_err.response is not None else 502
+            error_body = http_err.response.text if http_err.response is not None else 'Payment failed'
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': error_body}), status_code
+            msg = 'Payment failed: {}'.format(error_body)
+            return redirect(url_for('home',
+                                    msg=msg,
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting payment: %s', str(err))
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': 'Payment failed', 'details': str(err)}), 502
         except UserWarning as warn:
             app.logger.error('Error submitting payment: %s', str(warn))
             msg = 'Payment failed: {}'.format(str(warn))
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': str(warn)}), 400
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
@@ -256,7 +273,11 @@ def create_app():
         except (ValueError, DecimalException) as num_err:
             app.logger.error('Error submitting payment: %s', str(num_err))
             msg = 'Payment failed: {} is not a valid number'.format(user_input)
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': msg}), 400
 
+        if request.accept_mimetypes.best == 'application/json':
+            return jsonify({'message': 'Payment failed'}), 500
         return redirect(url_for('home',
                                 msg='Payment failed',
                                 _external=True,
@@ -305,22 +326,41 @@ def create_app():
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': 'Deposit successful'}), 201
             return redirect(code=303,
                             location=url_for('home',
                                              msg='Deposit successful',
                                              _external=True,
                                              _scheme=app.config['SCHEME']))
 
+        except requests.exceptions.HTTPError as http_err:
+            app.logger.error('Error submitting deposit: %s', str(http_err))
+            status_code = http_err.response.status_code if http_err.response is not None else 502
+            error_body = http_err.response.text if http_err.response is not None else 'Deposit failed'
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': error_body}), status_code
+            msg = 'Deposit failed: {}'.format(error_body)
+            return redirect(url_for('home',
+                                    msg=msg,
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': 'Deposit failed', 'details': str(err)}), 502
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
             msg = 'Deposit failed: {}'.format(str(warn))
+            if request.accept_mimetypes.best == 'application/json':
+                return jsonify({'message': str(warn)}), 400
             return redirect(url_for('home',
                                     msg=msg,
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
 
+        if request.accept_mimetypes.best == 'application/json':
+            return jsonify({'message': 'Deposit failed'}), 500
         return redirect(url_for('home',
                                 msg='Deposit failed',
                                 _external=True,
@@ -335,10 +375,7 @@ def create_app():
                              data=jsonify(transaction_data).data,
                              headers=hed,
                              timeout=app.config['BACKEND_TIMEOUT'])
-        try:
-            resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
-        except requests.exceptions.HTTPError as http_request_err:
-            raise UserWarning(resp.text) from http_request_err
+        resp.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
         # Short delay to allow the transaction to propagate to balancereader
         # and transaction-history
         sleep(0.25)
