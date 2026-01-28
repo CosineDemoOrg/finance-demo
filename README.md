@@ -138,6 +138,9 @@ The following button opens up an interactive tutorial showing how to deploy Bank
 - [Workload Identity](/docs/workload-identity.md) to learn how to set-up Workload Identity.
 - [CI/CD pipeline](/docs/ci-cd-pipeline.md) to learn details about and how to set-up the CI/CD pipeline.
 - [Troubleshooting](/docs/troubleshooting.md) to learn how to resolve common problems.
+- [User service notifications](/src/accounts/userservice/README.md#notifications-provider-configuration)
+  for details on configuring and switching the email notification provider
+  (console vs SMTP).
 
 ## Demos featuring Bank of Anthos
 - [Tutorial: Explore Anthos (Google Cloud docs)](https://cloud.google.com/anthos/docs/tutorials/explore-anthos)
