@@ -125,11 +125,8 @@ class TestUserservice(unittest.TestCase):
         response = self.test_app.post('/users', data=example_user_request)
         # assert 409 response code
         self.assertEqual(response.status_code, 409)
-        # assert we get correct error message
-        self.assertEqual(
-            response.data,
-            'user {} already exists'.format(example_user_request['username']).encode()
-        )
+        # assert we get correct error body
+        self.assertEqual(response.json, {'error': 'conflict', 'field': 'username'})
 
     def test_create_user_sql_error_500_status_code_error_message(self):
         """test creating a new user but throws SQL error when trying to add"""

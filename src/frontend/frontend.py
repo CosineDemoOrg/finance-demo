@@ -572,7 +572,8 @@ def create_app():
                                platform=platform,
                                platform_display_name=platform_display_name,
                                pod_name=pod_name,
-                               pod_zone=pod_zone)
+                               pod_zone=pod_zone,
+                               conflict_field=None)
 
     @app.route("/signup", methods=['POST'])
     def signup():
@@ -593,6 +594,27 @@ def create_app():
                 return _login_helper(request.form['username'],
                                      request.form['password'],
                                      request.args)
+            if resp.status_code == 409:
+                app.logger.info('Signup conflict from userservice: %s', resp.text)
+                conflict_field = None
+                try:
+                    body = resp.json()
+                    if isinstance(body, dict):
+                        conflict_field = body.get('field')
+                except ValueError:
+                    app.logger.error('Failed to parse conflict response JSON.')
+
+                return render_template(
+                    'signup.html',
+                    bank_name=os.getenv('BANK_NAME', 'Bank of Anthos'),
+                    cluster_name=cluster_name,
+                    cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
+                    platform=platform,
+                    platform_display_name=platform_display_name,
+                    pod_name=pod_name,
+                    pod_zone=pod_zone,
+                    conflict_field=conflict_field,
+                )
         except requests.exceptions.RequestException as err:
             app.logger.error('Error creating new user: %s', str(err))
         return redirect(url_for('login',

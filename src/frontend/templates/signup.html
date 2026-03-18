@@ -47,10 +47,15 @@ limitations under the License.
                         <div class="input-group-prepend mr-2">
                           <span class="input-group-text"><span class="material-icons">account_circle</span></span>
                         </div>
-                        <input class="form-control" type="text" id="signup-username" name="username" autocomplete="off" pattern="([a-zA-Z0-9_]){2,15}" required>
+                        <input class="form-control{% if conflict_field == 'username' %} is-invalid{% endif %}" type="text" id="signup-username" name="username" autocomplete="off" pattern="([a-zA-Z0-9_]){2,15}" required>
                         <div class="invalid-feedback">
                             Please enter a valid username. Username must be 2 to 15 characters in length and contain only alphanumeric or underscore characters.
                         </div>
+                        {% if conflict_field == 'username' %}
+                        <div class="invalid-feedback d-block">
+                            This username is already in use. Please choose another one.
+                        </div>
+                        {% endif %}
                       </div>
                     </div>
 

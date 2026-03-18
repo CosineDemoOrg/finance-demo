@@ -27,7 +27,7 @@ import bcrypt
 import jwt
 from flask import Flask, jsonify, request
 import bleach
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError, IntegrityError
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -90,7 +90,11 @@ def create_app():
             __validate_new_user(req)
             # Check if user already exists
             if users_db.get_user(req['username']) is not None:
-                raise NameError('user {} already exists'.format(req['username']))
+                app.logger.error(
+                    "Error creating new user: user %s already exists",
+                    req['username'],
+                )
+                return jsonify({'error': 'conflict', 'field': 'username'}), 409
 
             # Create password hash with salt
             app.logger.debug("Creating password hash.")
@@ -122,9 +126,14 @@ def create_app():
         except UserWarning as warn:
             app.logger.error("Error creating new user: %s", str(warn))
             return str(warn), 400
-        except NameError as err:
-            app.logger.error("Error creating new user: %s", str(err))
-            return str(err), 409
+        except IntegrityError as err:
+            app.logger.error("Error creating new user (integrity): %s", str(err))
+            # Default to username conflicts; infer email if present in the error
+            field = 'username'
+            err_str = str(err).lower()
+            if 'email' in err_str:
+                field = 'email'
+            return jsonify({'error': 'conflict', 'field': field}), 409
         except SQLAlchemyError as err:
             app.logger.error("Error creating new user: %s", str(err))
             return 'failed to create user', 500
