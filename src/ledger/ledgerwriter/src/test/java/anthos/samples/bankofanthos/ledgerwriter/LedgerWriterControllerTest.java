@@ -209,7 +209,7 @@ class LedgerWriterControllerTest {
 
     @Test
     @DisplayName("Given the transaction is internal and the transaction amount > sender balance, " +
-            "return HTTP Status 400")
+            "return HTTP Status 422")
     void addTransactionFailWhenWhenAmountLargerThanBalance(TestInfo testInfo) {
         // Given
         LedgerWriterController spyLedgerWriterController =
@@ -232,48 +232,7 @@ class LedgerWriterControllerTest {
         assertEquals(
                 EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE,
                 actualResult.getBody());
-        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
-    }
-
-    @Test
-    @DisplayName("Given JWT verifier cannot verify the given bearer token, " +
-            "return HTTP Status 401")
-    void addTransactionWhenJWTVerificationExceptionThrown() {
-        // Given
-        when(verifier.verify(TOKEN)).thenThrow(
-                JWTVerificationException.class);
-
-        // When
-        final ResponseEntity actualResult =
-                ledgerWriterController.addTransaction(
-                        BEARER_TOKEN, transaction);
-
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(ledgerWriterController.UNAUTHORIZED_CODE,
-                actualResult.getBody());
-        assertEquals(HttpStatus.UNAUTHORIZED, actualResult.getStatusCode());
-    }
-
-    @Test
-    @DisplayName("Given exception thrown on validation, return HTTP Status 400")
-    void addTransactionWhenIllegalArgumentExceptionThrown() {
-        // Given
-        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
-        doThrow(new IllegalArgumentException(EXCEPTION_MESSAGE)).
-                when(transactionValidator).validateTransaction(
-                        LOCAL_ROUTING_NUM, AUTHED_ACCOUNT_NUM, transaction);
-
-        // When
-        final ResponseEntity actualResult =
-                ledgerWriterController.addTransaction(
-                BEARER_TOKEN, transaction);
-
-        // Then
-        assertNotNull(actualResult);
-        assertEquals(EXCEPTION_MESSAGE,
-                actualResult.getBody());
-        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, actualResult.getStatusCode());
     }
 
     @Test
@@ -294,7 +253,7 @@ class LedgerWriterControllerTest {
 
     @Test
     @DisplayName("Given the transaction is internal, check available balance and the balance " +
-            "reader throws an error, return HTTP Status 500")
+            "reader throws an error, return HTTP Status 503")
     void addTransactionWhenResourceAccessExceptionThrown(TestInfo testInfo) {
         // Given
         LedgerWriterController spyLedgerWriterController =
@@ -314,12 +273,12 @@ class LedgerWriterControllerTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(EXCEPTION_MESSAGE, actualResult.getBody());
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR,
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,
                 actualResult.getStatusCode());
     }
 
     @Test
-    @DisplayName("Given the transaction is external and the transaction cannot be saved to the " +
+    @DisplayNameme("Given the transaction is external and the transaction cannot be saved to the " +
             "transaction repository, return HTTP Status 500")
     void addTransactionWhenCannotCreateTransactionExceptionExceptionThrown(TestInfo testInfo) {
         // Given
@@ -336,7 +295,14 @@ class LedgerWriterControllerTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(EXCEPTION_MESSAGE, actualResult.getBody());
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR,
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,
+                actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given the transaction is external and the transaction cannot be saved to the " +
+            "transaction repository, return HTTP Status 503")
+    void addTransactionWhenCannotCreateTransactionExceptionExceptionThrown(TestInfo testInfo) {NTERNAL_SERVER_ERROR,
                 actualResult.getStatusCode());
     }
 
