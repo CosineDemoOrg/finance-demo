@@ -46,4 +46,12 @@ public interface TransactionRepository
     @Query("SELECT t FROM Transaction t "
         + " WHERE t.transactionId > ?1 ORDER BY t.transactionId ASC")
     List<Transaction> findLatest(long latestTransaction);
+
+    @Query("SELECT COALESCE(SUM(CASE "
+        + " WHEN t.toAccountNum=?1 AND t.toRoutingNum=?2 THEN t.amount "
+        + " WHEN t.fromAccountNum=?1 AND t.fromRoutingNum=?2 THEN -t.amount "
+        + " ELSE 0 END), 0) FROM Transaction t "
+        + " WHERE t.timestamp <= ?3")
+    Integer balanceAt(String accountNum, String routingNum,
+        java.util.Date timestamp);
 }
