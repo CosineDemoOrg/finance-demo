@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package anthos.samples.bankofanthos.ledgerwriter;
+package anthos.samples.bankofanthos.ledger.common;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -22,13 +22,13 @@ import org.springframework.stereotype.Component;
 
 import java.util.regex.Pattern;
 
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.
         EXCEPTION_MESSAGE_INVALID_NUMBER;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.
         EXCEPTION_MESSAGE_NOT_AUTHENTICATED;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.
         EXCEPTION_MESSAGE_SEND_TO_SELF;
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.
+import static anthos.samples.bankofanthos.ledger.common.ExceptionMessages.
         EXCEPTION_MESSAGE_INVALID_AMOUNT;
 
 
@@ -56,7 +56,6 @@ public class TransactionValidator {
      *
      * @param authedAccount  the currently authenticated user account
      * @param transaction    the transaction object
-     * @param bearerToken    the token used to authenticate request
      *
      * @throws IllegalArgumentException  on validation error
      */
