@@ -110,6 +110,10 @@ def create_app():
         username = token_data['user']
         account_id = token_data['acct']
 
+        filter_from = request.args.get('from')
+        filter_to = request.args.get('to')
+        _validate_date_filters(filter_from, filter_to)
+
         hed = {'Authorization': 'Bearer ' + token}
 
         api_calls = [
@@ -151,6 +155,9 @@ def create_app():
                     api_call = future_to_api_call[future]
                     api_response[api_call.display_name] = future.result().json()
 
+        api_response[TRANSACTION_LIST_NAME] = _filter_transactions_by_date(
+            api_response[TRANSACTION_LIST_NAME], filter_from, filter_to)
+
         _populate_contact_labels(account_id,
                                  api_response[TRANSACTION_LIST_NAME],
                                  api_response[CONTACTS_NAME])
@@ -162,6 +169,8 @@ def create_app():
                                cluster_name=cluster_name,
                                contacts=api_response[CONTACTS_NAME],
                                cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
+                               filter_from=filter_from,
+                               filter_to=filter_to,
                                history=api_response[TRANSACTION_LIST_NAME],
                                message=request.args.get('msg', None),
                                name=display_name,
@@ -169,6 +178,39 @@ def create_app():
                                platform_display_name=platform_display_name,
                                pod_name=pod_name,
                                pod_zone=pod_zone)
+
+    @app.route('/transactions/export', methods=['GET'])
+    def export_transactions():
+        token = request.cookies.get(app.config['TOKEN_NAME'])
+        if not verify_token(token):
+            return abort(401)
+
+        token_data = decode_token(token)
+        account_id = token_data['acct']
+
+        filter_from = request.args.get('from')
+        filter_to = request.args.get('to')
+        _validate_date_filters(filter_from, filter_to)
+
+        params = {'account_id': account_id}
+        if filter_from:
+            params['from'] = filter_from
+        if filter_to:
+            params['to'] = filter_to
+
+        hed = {'Authorization': 'Bearer ' + token}
+        resp = requests.get(url=app.config['HISTORY_EXPORT_URI'],
+                            params=params,
+                            headers=hed,
+                            timeout=app.config['BACKEND_TIMEOUT'])
+        resp.raise_for_status()
+
+        response = make_response(resp.content)
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = resp.headers.get(
+            'Content-Disposition',
+            'attachment; filename=transactions.csv')
+        return response
 
     def _populate_contact_labels(account_id, transactions, contacts):
         """
@@ -199,6 +241,42 @@ def create_app():
                 trans['accountLabel'] = contact_map.get(trans['fromAccountNum'])
             elif trans['fromAccountNum'] == account_id:
                 trans['accountLabel'] = contact_map.get(trans['toAccountNum'])
+
+    def _validate_date_filters(filter_from, filter_to):
+        if filter_from is None and filter_to is None:
+            return
+        try:
+            from_date = datetime.date.fromisoformat(filter_from) if filter_from else None
+            to_date = datetime.date.fromisoformat(filter_to) if filter_to else None
+        except ValueError as err:
+            abort(400, description='invalid date format')
+
+        if from_date and to_date and from_date > to_date:
+            abort(400, description='from must be <= to')
+
+        if from_date and to_date and from_date + datetime.timedelta(days=365) < to_date:
+            abort(400, description='date range must be <= 1 year')
+
+    def _filter_transactions_by_date(transactions, filter_from, filter_to):
+        if transactions is None:
+            return transactions
+
+        if filter_from is None and filter_to is None:
+            return transactions
+
+        from_date = datetime.date.fromisoformat(filter_from) if filter_from else None
+        to_date = datetime.date.fromisoformat(filter_to) if filter_to else None
+
+        filtered = []
+        for trans in transactions:
+            tx_ts = datetime.datetime.strptime(trans['timestamp'], app.config['TIMESTAMP_FORMAT'])
+            tx_date = tx_ts.date()
+            if from_date and tx_date < from_date:
+                continue
+            if to_date and tx_date > to_date:
+                continue
+            filtered.append(trans)
+        return filtered
 
     @app.route('/payment', methods=['POST'])
     def payment():
@@ -666,6 +744,8 @@ def create_app():
     app.config["BALANCES_URI"] = 'http://{}/balances'.format(
         os.environ.get('BALANCES_API_ADDR'))
     app.config["HISTORY_URI"] = 'http://{}/transactions'.format(
+        os.environ.get('HISTORY_API_ADDR'))
+    app.config["HISTORY_EXPORT_URI"] = 'http://{}/transactions/export'.format(
         os.environ.get('HISTORY_API_ADDR'))
     app.config["LOGIN_URI"] = 'http://{}/login'.format(
         os.environ.get('USERSERVICE_API_ADDR'))

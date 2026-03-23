@@ -18,6 +18,7 @@ package anthos.samples.bankofanthos.transactionhistory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
@@ -31,6 +32,10 @@ import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.lang.Nullable;
 import io.micrometer.stackdriver.StackdriverConfig;
 import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayDeque;
+import java.util.Date;
 import java.util.Deque;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +65,8 @@ class TransactionHistoryControllerTest {
     private CacheStats stats;
     @Mock
     private Deque<Transaction> transactions;
+    @Mock
+    private TransactionRepository dbRepo;
 
     private static final String VERSION = "v0.2.0";
     private static final String LOCAL_ROUTING_NUM = "123456789";
@@ -94,7 +101,7 @@ class TransactionHistoryControllerTest {
 
         when(cache.stats()).thenReturn(stats);
         transactionHistoryController = new TransactionHistoryController(ledgerReader,
-            meterRegistry, verifier, PUBLIC_KEY_PATH, cache, LOCAL_ROUTING_NUM, VERSION);
+            meterRegistry, verifier, PUBLIC_KEY_PATH, cache, LOCAL_ROUTING_NUM, dbRepo, VERSION);
 
         when(verifier.verify(TOKEN)).thenReturn(jwt);
         when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
@@ -217,6 +224,79 @@ class TransactionHistoryControllerTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given valid date range, return CSV with filtered transactions")
+    void exportTransactionsReturnsCsvWithFilters() throws Exception {
+        // Given
+        when(verifier.verify(TOKEN)).thenReturn(jwt);
+        when(jwt.getClaim(JWT_ACCOUNT_KEY)).thenReturn(claim);
+        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
+
+        Transaction inRange = mock(Transaction.class);
+        Date inRangeDate = Date.from(LocalDate.of(2024, 1, 15)
+            .atStartOfDay().toInstant(ZoneOffset.UTC));
+        when(inRange.getTimestamp()).thenReturn(inRangeDate);
+        when(inRange.getToAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(inRange.getFromAccountNum()).thenReturn("111");
+        when(inRange.getAmount()).thenReturn(250);
+        when(inRange.getTransactionId()).thenReturn(10L);
+
+        Transaction outOfRange = mock(Transaction.class);
+        Date outOfRangeDate = Date.from(LocalDate.of(2023, 1, 15)
+            .atStartOfDay().toInstant(ZoneOffset.UTC));
+        when(outOfRange.getTimestamp()).thenReturn(outOfRangeDate);
+
+        Deque<Transaction> deque = new ArrayDeque<>();
+        deque.add(inRange);
+        deque.add(outOfRange);
+        when(cache.get(AUTHED_ACCOUNT_NUM)).thenReturn(deque);
+
+        when(dbRepo.balanceAt(AUTHED_ACCOUNT_NUM, LOCAL_ROUTING_NUM, inRangeDate))
+            .thenReturn(1000);
+
+        // When
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactions(BEARER_TOKEN, AUTHED_ACCOUNT_NUM,
+                "2024-01-01", "2024-01-31");
+
+        // Then
+        assertEquals(HttpStatus.OK, actualResult.getStatusCode());
+        assertEquals("text/csv", actualResult.getHeaders().getContentType().toString());
+        String body = new String((byte[]) actualResult.getBody());
+        assertEquals(true,
+            body.startsWith("date,description,amount,currency,balance_after,transaction_id\n"));
+        assertEquals(true,
+            body.contains("2024-01-15,Credit from 111,2.50,USD,10.00,10\n"));
+        assertEquals(false, body.contains("2023-01-15"));
+    }
+
+    @Test
+    @DisplayName("Given invalid date input, return 400")
+    void exportTransactionsInvalidDateReturns400() {
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactions(BEARER_TOKEN, AUTHED_ACCOUNT_NUM,
+                "not-a-date", "2024-01-31");
+        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given from > to, return 400")
+    void exportTransactionsFromAfterToReturns400() {
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactions(BEARER_TOKEN, AUTHED_ACCOUNT_NUM,
+                "2024-02-01", "2024-01-01");
+        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given date range over 1 year, return 400")
+    void exportTransactionsOverOneYearReturns400() {
+        final ResponseEntity actualResult = transactionHistoryController
+            .exportTransactions(BEARER_TOKEN, AUTHED_ACCOUNT_NUM,
+                "2023-01-01", "2024-02-01");
+        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
     }
 
 }

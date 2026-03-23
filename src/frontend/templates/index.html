@@ -127,6 +127,14 @@ limitations under the License.
                     Transaction History
                   </h4>
                 </div>
+                <div class="col-auto">
+                  <form class="form-inline" method="GET" action="/home">
+                    <input id="filter-from" class="form-control form-control-sm mr-2" type="date" name="from" value="{{ filter_from or '' }}">
+                    <input id="filter-to" class="form-control form-control-sm mr-2" type="date" name="to" value="{{ filter_to or '' }}">
+                    <button type="submit" class="btn btn-sm btn-secondary mr-2">Apply</button>
+                    <a class="btn btn-sm btn-primary" href="#" onclick="event.preventDefault(); var f=document.getElementById('filter-from').value; var t=document.getElementById('filter-to').value; var q=[]; if (f) { q.push('from=' + encodeURIComponent(f)); } if (t) { q.push('to=' + encodeURIComponent(t)); } window.location='/transactions/export' + (q.length ? ('?' + q.join('&')) : '');">Export CSV</a>
+                  </form>
+                </div>
               </div>
             </div>
             <div class="table-responsive mb-0" id="transaction-table">
