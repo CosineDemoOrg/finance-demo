@@ -83,6 +83,10 @@ public final class Transaction {
     public Integer getAmount() {
         return amount;
     }
+
+    public Date getTimestamp() {
+        return timestamp;
+    }
     /**
      * String representation.
      *
