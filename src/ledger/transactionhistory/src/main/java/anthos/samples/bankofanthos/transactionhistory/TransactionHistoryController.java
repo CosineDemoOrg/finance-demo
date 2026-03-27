@@ -16,6 +16,8 @@
 
 package anthos.samples.bankofanthos.transactionhistory;
 
+import anthos.samples.bankofanthos.ledger.Transaction;
+
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
