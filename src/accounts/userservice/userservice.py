@@ -29,6 +29,8 @@ from flask import Flask, jsonify, request
 import bleach
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
+from notifications import NotificationsService
+
 from opentelemetry import trace
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace import TracerProvider
@@ -118,6 +120,12 @@ def create_app():
             app.logger.debug("Adding user to the database")
             users_db.add_user(user_data)
             app.logger.info("Successfully created user.")
+
+            # Send welcome notification. Failures here should not impact user creation.
+            notifications_service.send_welcome_email(
+                req["username"],
+                "{} {}".format(req["firstname"], req["lastname"])
+            )
 
         except UserWarning as warn:
             app.logger.error("Error creating new user: %s", str(warn))
@@ -246,6 +254,10 @@ def create_app():
     except OperationalError:
         app.logger.critical("users_db database connection failed")
         sys.exit(1)
+
+    # Configure notifications service
+    notifications_service = NotificationsService(app.logger)
+
     return app
 
 

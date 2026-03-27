@@ -37,6 +37,37 @@ Implemented in Python with Flask.
   - `ACCOUNTS_DB_URI`
     - the complete URI for the `accounts-db` database
 
+#### Notifications provider configuration
+
+User-facing email notifications (welcome, password reset, etc.) are sent
+through a simple notifications service with a pluggable provider. The
+provider is selected at runtime via environment variables.
+
+- `NOTIFICATIONS_PROVIDER`
+  - which provider implementation to use
+  - supported values:
+    - `console` (default): log notification events only
+    - `smtp`: send real emails via SMTP
+
+When `NOTIFICATIONS_PROVIDER=smtp`, the following variables are used:
+
+- `SMTP_HOST`
+  - hostname of the SMTP server (required)
+- `SMTP_PORT`
+  - port of the SMTP server (default: `587`)
+- `SMTP_USERNAME`
+  - SMTP username (optional; if not set, authentication is skipped)
+- `SMTP_PASSWORD`
+  - SMTP password (optional; only used when `SMTP_USERNAME` is set)
+- `SMTP_USE_TLS`
+  - whether to use STARTTLS for SMTP connections (`true`/`false`, default: `true`)
+- `SMTP_FROM_ADDRESS`
+  - email address used for the `From:` header (required)
+
+> To switch providers, update `NOTIFICATIONS_PROVIDER` on the
+> `userservice` Deployment (for example from `console` to `smtp`) and
+> redeploy. No frontend changes are required.
+
 ### Kubernetes Resources
 
 - [deployments/userservice](/kubernetes-manifests/userservice.yaml)
