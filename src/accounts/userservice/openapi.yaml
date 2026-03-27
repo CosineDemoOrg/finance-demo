@@ -1,0 +1,104 @@
+openapi: 3.0.3
+info:
+  title: User Service API
+  version: "1.0.0"
+  description: |
+    API for managing user accounts and authentication.
+
+paths:
+  /users:
+    post:
+      summary: Create a new user
+      description: |
+        Creates a new user account.
+
+        Returns HTTP 409 Conflict if the username (or email, if present in the model)
+        is already in use. The conflict response uses a consistent error payload:
+        `{"error":"conflict","field":"username","message":"Already in use"}`.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        "201":
+          description: User successfully created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "409":
+          description: Username (or email) already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Internal server error
+
+components:
+  schemas:
+    CreateUserRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Unique username for the user.
+        password:
+          type: string
+          format: password
+        password-repeat:
+          type: string
+          format: password
+        firstname:
+          type: string
+        lastname:
+          type: string
+        birthday:
+          type: string
+          format: date
+        timezone:
+          type: string
+        address:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        ssn:
+          type: string
+      required:
+        - username
+        - password
+        - password-repeat
+        - firstname
+        - lastname
+        - birthday
+        - timezone
+        - address
+        - state
+        - zip
+        - ssn
+
+    ErrorResponse:
+      type: object
+      description: Standard error payload for user-service.
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code.
+          example: conflict
+        field:
+          type: string
+          description: The field related to this error, if applicable.
+          example: username
+        message:
+          type: string
+          description: Human-readable description of the error.
+          example: Already in use
+      required:
+        - error
+        - message

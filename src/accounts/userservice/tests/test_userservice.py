@@ -21,7 +21,7 @@ import random
 import unittest
 from unittest.mock import patch, mock_open
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import jwt
 
 from userservice.userservice import create_app
@@ -125,10 +125,14 @@ class TestUserservice(unittest.TestCase):
         response = self.test_app.post('/users', data=example_user_request)
         # assert 409 response code
         self.assertEqual(response.status_code, 409)
-        # assert we get correct error message
+        # assert we get correct error payload
         self.assertEqual(
-            response.data,
-            'user {} already exists'.format(example_user_request['username']).encode()
+            response.json,
+            {
+                'error': 'conflict',
+                'field': 'username',
+                'message': 'Already in use',
+            },
         )
 
     def test_create_user_sql_error_500_status_code_error_message(self):
@@ -146,6 +150,29 @@ class TestUserservice(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         # assert we get correct error message
         self.assertEqual(response.data, b'failed to create user')
+
+    def test_create_user_integrity_error_409_status_code_error_message(self):
+        """test creating a new user where DB uniqueness raises IntegrityError"""
+        # mock return value of get_user which checks if user does not yet exist
+        self.mocked_db.return_value.get_user.return_value = None
+        # mock return value of add_user to throw IntegrityError
+        self.mocked_db.return_value.add_user.side_effect = IntegrityError(
+            statement='',
+            params={},
+            orig=Exception('duplicate key value violates unique constraint'),
+        )
+        example_user = EXAMPLE_USER_REQUEST.copy()
+        example_user['username'] = 'foo'
+        response = self.test_app.post('/users', data=example_user)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json,
+            {
+                'error': 'conflict',
+                'field': 'username',
+                'message': 'Already in use',
+            },
+        )
 
     def test_create_user_malformed_400_status_code_error_message(self):
         """test creating a new user without required keys"""

@@ -593,6 +593,43 @@ def create_app():
                 return _login_helper(request.form['username'],
                                      request.form['password'],
                                      request.args)
+
+            if resp.status_code == 409:
+                # surface conflict as inline form error on signup page
+                app.logger.info('Conflict creating new user: %s', resp.text)
+                error_field = None
+                error_message = 'Account already exists.'
+                try:
+                    payload = resp.json()
+                    if isinstance(payload, dict):
+                        error_field = payload.get('field')
+                        if payload.get('error') == 'conflict' and payload.get('message'):
+                            # Use backend-provided message when available
+                            error_message = payload['message']
+                except ValueError:
+                    # response body was not JSON; fall back to generic message
+                    app.logger.debug('Conflict response was not JSON.')
+
+                # Map backend field to human-friendly field-specific message
+                field_name = error_field or 'username'
+                if field_name == 'username':
+                    inline_message = 'Username already in use'
+                elif field_name == 'email':
+                    inline_message = 'Email already in use'
+                else:
+                    inline_message = error_message
+
+                return render_template('signup.html',
+                                       bank_name=os.getenv('BANK_NAME', 'Bank of Anthos'),
+                                       cluster_name=cluster_name,
+                                       cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
+                                       platform=platform,
+                                       platform_display_name=platform_display_name,
+                                       pod_name=pod_name,
+                                       pod_zone=pod_zone,
+                                       error_field=field_name,
+                                       error_message=inline_message)
+
         except requests.exceptions.RequestException as err:
             app.logger.error('Error creating new user: %s', str(err))
         return redirect(url_for('login',
