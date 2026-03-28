@@ -11,6 +11,8 @@ Google uses this application to demonstrate how developers can modernize enterpr
 
 If you are using Bank of Anthos, please ★Star this repository to show your interest!
 
+> Fun fact: unlike a real bank, if you accidentally “overspend” here, the only thing at risk is your Kubernetes cluster.
+
 **Note to Googlers:** Please fill out the form at [go/bank-of-anthos-form](https://goto2.corp.google.com/bank-of-anthos-form).
 
 ## Screenshots
