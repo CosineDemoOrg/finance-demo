@@ -18,7 +18,7 @@ db manages interactions with the underlying database
 
 import logging
 import random
-from sqlalchemy import create_engine, MetaData, Table, Column, String, Date, LargeBinary
+from sqlalchemy import create_engine, MetaData, Table, Column, String, Date, LargeBinary, Integer, Text, ForeignKey, DateTime, func, select
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
 class UserDb:
@@ -30,9 +30,11 @@ class UserDb:
     def __init__(self, uri, logger=logging):
         self.engine = create_engine(uri)
         self.logger = logger
+        metadata = MetaData(self.engine)
+
         self.users_table = Table(
             'users',
-            MetaData(self.engine),
+            metadata,
             Column('accountid', String, primary_key=True),
             Column('username', String, unique=True, nullable=False),
             Column('passhash', LargeBinary, nullable=False),
@@ -44,6 +46,34 @@ class UserDb:
             Column('state', String, nullable=False),
             Column('zip', String, nullable=False),
             Column('ssn', String, nullable=False),
+        )
+
+        self.organizations_table = Table(
+            'organizations',
+            metadata,
+            Column('id', Integer, primary_key=True),
+            Column('name', String, nullable=False),
+            Column('created_at', DateTime, server_default=func.now(), nullable=False),
+        )
+
+        self.memberships_table = Table(
+            'organization_memberships',
+            metadata,
+            Column('id', Integer, primary_key=True),
+            Column('org_id', Integer, ForeignKey('organizations.id'), nullable=False),
+            Column('accountid', String, ForeignKey('users.accountid'), nullable=False),
+            Column('role', String, nullable=False),
+        )
+
+        self.items_table = Table(
+            'items',
+            metadata,
+            Column('id', Integer, primary_key=True),
+            Column('org_id', Integer, ForeignKey('organizations.id'), nullable=False),
+            Column('owner_accountid', String, ForeignKey('users.accountid'), nullable=False),
+            Column('name', String, nullable=False),
+            Column('description', Text),
+            Column('created_at', DateTime, server_default=func.now(), nullable=False),
         )
 
         # Set up tracing autoinstrumentation for sqlalchemy
@@ -99,3 +129,128 @@ class UserDb:
             result = conn.execute(statement).first()
         self.logger.debug('RESULT: fetched user data for %s', username)
         return dict(result) if result is not None else None
+
+    def get_memberships_for_account(self, accountid):
+        """Return a list of organizations the given account belongs to."""
+        statement = (
+            select(
+                self.organizations_table.c.id.label('org_id'),
+                self.organizations_table.c.name.label('org_name'),
+                self.memberships_table.c.role.label('role'),
+            )
+            .select_from(self.memberships_table.join(
+                self.organizations_table,
+                self.organizations_table.c.id == self.memberships_table.c.org_id,
+            ))
+            .where(self.memberships_table.c.accountid == accountid)
+        )
+        self.logger.debug('QUERY: %s', str(statement))
+        with self.engine.connect() as conn:
+            rows = conn.execute(statement).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_membership(self, org_id, accountid):
+        """Return membership row for the given org/account or None."""
+        statement = self.memberships_table.select().where(
+            (self.memberships_table.c.org_id == org_id)
+            & (self.memberships_table.c.accountid == accountid)
+        )
+        self.logger.debug('QUERY: %s', str(statement))
+        with self.engine.connect() as conn:
+            row = conn.execute(statement).first()
+        return dict(row) if row is not None else None
+
+    def create_organization(self, name, owner_accountid):
+        """Create an organization and make the owner an admin."""
+        org_insert = (
+            self.organizations_table.insert()
+            .values(name=name)
+            .returning(self.organizations_table.c.id, self.organizations_table.c.name)
+        )
+        self.logger.debug('QUERY: %s', str(org_insert))
+        with self.engine.connect() as conn:
+            org_row = conn.execute(org_insert).first()
+            membership_insert = self.memberships_table.insert().values(
+                org_id=org_row.id,
+                accountid=owner_accountid,
+                role='admin',
+            )
+            self.logger.debug('QUERY: %s', str(membership_insert))
+            conn.execute(membership_insert)
+        return {'org_id': org_row.id, 'org_name': org_row.name, 'role': 'admin'}
+
+    def add_membership(self, org_id, accountid, role):
+        """Add or update a membership for the given account in the org."""
+        # Upsert semantics: try update, if no row then insert.
+        with self.engine.connect() as conn:
+            existing = conn.execute(
+                self.memberships_table.select().where(
+                    (self.memberships_table.c.org_id == org_id)
+                    & (self.memberships_table.c.accountid == accountid)
+                )
+            ).first()
+            if existing is None:
+                statement = self.memberships_table.insert().values(
+                    org_id=org_id,
+                    accountid=accountid,
+                    role=role,
+                )
+            else:
+                statement = self.memberships_table.update().where(
+                    self.memberships_table.c.id == existing.id
+                ).values(role=role)
+            self.logger.debug('QUERY: %s', str(statement))
+            conn.execute(statement)
+
+    def remove_membership(self, org_id, accountid):
+        """Remove membership for the given account from the org."""
+        statement = self.memberships_table.delete().where(
+            (self.memberships_table.c.org_id == org_id)
+            & (self.memberships_table.c.accountid == accountid)
+        )
+        self.logger.debug('QUERY: %s', str(statement))
+        with self.engine.connect() as conn:
+            conn.execute(statement)
+
+    def list_items(self, org_id):
+        """Return all items belonging to the given organization."""
+        statement = self.items_table.select().where(self.items_table.c.org_id == org_id)
+        self.logger.debug('QUERY: %s', str(statement))
+        with self.engine.connect() as conn:
+            rows = conn.execute(statement).fetchall()
+        return [dict(row) for row in rows]
+
+    def create_item(self, org_id, owner_accountid, name, description=None):
+        """Create an item for the given organization."""
+        statement = (
+            self.items_table.insert()
+            .values(
+                org_id=org_id,
+                owner_accountid=owner_accountid,
+                name=name,
+                description=description,
+            )
+            .returning(
+                self.items_table.c.id,
+                self.items_table.c.org_id,
+                self.items_table.c.owner_accountid,
+                self.items_table.c.name,
+                self.items_table.c.description,
+                self.items_table.c.created_at,
+            )
+        )
+        self.logger.debug('QUERY: %s', str(statement))
+        with self.engine.connect() as conn:
+            row = conn.execute(statement).first()
+        return dict(row)
+
+    def get_default_org_for_account(self, accountid):
+        """Return an org_id to use as default for the given account, or None."""
+        memberships = self.get_memberships_for_account(accountid)
+        if not memberships:
+            return None
+        # Prefer an org where the user is admin, otherwise first membership.
+        for membership in memberships:
+            if membership['role'] == 'admin':
+                return membership['org_id']
+        return memberships[0]['org_id']

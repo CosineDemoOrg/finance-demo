@@ -197,6 +197,8 @@ class TestUserservice(unittest.TestCase):
         example_user = EXAMPLE_USER.copy()
         example_user_request = EXAMPLE_USER_REQUEST.copy()
         self.mocked_db.return_value.get_user.return_value = example_user
+        # default org for this user
+        self.mocked_db.return_value.get_default_org_for_account.return_value = 1
         # set private key
         self.flask_app.config['PRIVATE_KEY'] = EXAMPLE_PRIVATE_KEY
         # send request to test client
@@ -215,6 +217,8 @@ class TestUserservice(unittest.TestCase):
             decoded_value['name'],
             "{} {}".format(EXAMPLE_USER['firstname'], EXAMPLE_USER['lastname']),
         )
+        # active_org_id claim should be present
+        self.assertEqual(decoded_value['active_org_id'], 1)
 
     # mock check pw to return false
     @patch('bcrypt.checkpw', return_value=False)

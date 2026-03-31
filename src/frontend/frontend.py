@@ -109,6 +109,7 @@ def create_app():
         display_name = token_data['name']
         username = token_data['user']
         account_id = token_data['acct']
+        active_org_id = token_data.get('active_org_id')
 
         hed = {'Authorization': 'Bearer ' + token}
 
@@ -155,6 +156,25 @@ def create_app():
                                  api_response[TRANSACTION_LIST_NAME],
                                  api_response[CONTACTS_NAME])
 
+        # Fetch organizations for the current user so the navbar can render an org switcher.
+        orgs = []
+        active_org = None
+        try:
+            orgs_resp = requests.get(
+                url=app.config["USERSERVICE_ORGS_URI"],
+                headers=hed,
+                timeout=app.config['BACKEND_TIMEOUT'],
+            )
+            if orgs_resp.ok:
+                orgs = orgs_resp.json().get('organizations', [])
+                if active_org_id is not None:
+                    for org in orgs:
+                        if int(org.get('org_id')) == int(active_org_id):
+                            active_org = org
+                            break
+        except (RequestException, HTTPError) as err:
+            app.logger.error('Error loading organizations: %s', str(err))
+
         return render_template('index.html',
                                account_id=account_id,
                                balance=api_response[BALANCE_NAME],
@@ -168,7 +188,10 @@ def create_app():
                                platform=platform,
                                platform_display_name=platform_display_name,
                                pod_name=pod_name,
-                               pod_zone=pod_zone)
+                               pod_zone=pod_zone,
+                               orgs=orgs,
+                               active_org=active_org,
+                               active_org_id=active_org_id)
 
     def _populate_contact_labels(account_id, transactions, contacts):
         """
@@ -613,6 +636,50 @@ def create_app():
         resp.delete_cookie(app.config['CONSENT_COOKIE'])
         return resp
 
+    @app.route('/switch-org', methods=['POST'])
+    def switch_org():
+        """Switch the active organization for the current user.
+
+        Submits a request to userservice /active-org and updates the auth token cookie.
+        """
+        token = request.cookies.get(app.config['TOKEN_NAME'])
+        if not verify_token(token):
+            return redirect(url_for('login_page',
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
+        org_id = request.form.get('org_id')
+        if not org_id:
+            return redirect(url_for('home',
+                                    msg='Missing organization',
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
+        try:
+            hed = {
+                'Authorization': 'Bearer ' + token,
+                'content-type': 'application/json',
+            }
+            resp = requests.post(
+                url=app.config["USERSERVICE_ACTIVE_ORG_URI"],
+                data=jsonify({'org_id': int(org_id)}).data,
+                headers=hed,
+                timeout=app.config['BACKEND_TIMEOUT'],
+            )
+            resp.raise_for_status()
+            new_token = resp.json()['token']
+            claims = decode_token(new_token)
+            max_age = claims['exp'] - claims['iat']
+            response = make_response(redirect(url_for('home',
+                                                      _external=True,
+                                                      _scheme=app.config['SCHEME'])))
+            response.set_cookie(app.config['TOKEN_NAME'], new_token, max_age=max_age)
+            return response
+        except (RequestException, HTTPError, KeyError, ValueError) as err:
+            app.logger.error('Error switching organization: %s', str(err))
+            return redirect(url_for('home',
+                                    msg='Failed to switch organization',
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
+
     def decode_token(token):
         return jwt.decode(algorithms='RS256',
                           jwt=token,
@@ -662,6 +729,10 @@ def create_app():
     app.config["TRANSACTIONS_URI"] = 'http://{}/transactions'.format(
         os.environ.get('TRANSACTIONS_API_ADDR'))
     app.config["USERSERVICE_URI"] = 'http://{}/users'.format(
+        os.environ.get('USERSERVICE_API_ADDR'))
+    app.config["USERSERVICE_ORGS_URI"] = 'http://{}/orgs'.format(
+        os.environ.get('USERSERVICE_API_ADDR'))
+    app.config["USERSERVICE_ACTIVE_ORG_URI"] = 'http://{}/active-org'.format(
         os.environ.get('USERSERVICE_API_ADDR'))
     app.config["BALANCES_URI"] = 'http://{}/balances'.format(
         os.environ.get('BALANCES_API_ADDR'))
