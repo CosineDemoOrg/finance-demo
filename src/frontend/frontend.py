@@ -246,6 +246,7 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting payment: %s', str(err))
+            return abort(502)
         except UserWarning as warn:
             app.logger.error('Error submitting payment: %s', str(warn))
             msg = 'Payment failed: {}'.format(str(warn))
@@ -313,6 +314,7 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+            return abort(502)
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
             msg = 'Deposit failed: {}'.format(str(warn))
