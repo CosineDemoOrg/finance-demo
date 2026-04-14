@@ -21,9 +21,12 @@ import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTI
 import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_WHEN_AUTHORIZATION_HEADER_NULL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
@@ -73,9 +76,14 @@ class LedgerWriterControllerTest {
     private static final String BEARER_TOKEN = "Bearer abc";
     private static final String TOKEN = "abc";
     private static final String EXCEPTION_MESSAGE = "Invalid variable";
+    private static final String FEE_ACCOUNT_NUM = "9999999999";
+    private static final String FEE_ROUTING_NUM = "123456789";
     private static final int SENDER_BALANCE = 40;
     private static final int LARGER_THAN_SENDER_BALANCE = 1000;
+    // 10 cents + ceil(10 * 0.005) = 10 + 1 = 11 cents total; fits within SENDER_BALANCE of 40
     private static final int SMALLER_THAN_SENDER_BALANCE = 10;
+    // 39 cents + ceil(39 * 0.005) = 39 + 1 = 40 cents total; exactly equals SENDER_BALANCE
+    private static final int AMOUNT_FITTING_WITH_FEE = 39;
 
     @BeforeEach
     void setUp() {
@@ -101,7 +109,8 @@ class LedgerWriterControllerTest {
         ledgerWriterController = new LedgerWriterController(verifier,
                 meterRegistry,
                 transactionRepository, transactionValidator,
-                LOCAL_ROUTING_NUM, BALANCES_API_ADDR, VERSION);
+                LOCAL_ROUTING_NUM, BALANCES_API_ADDR, VERSION,
+                FEE_ACCOUNT_NUM, FEE_ROUTING_NUM);
 
         when(verifier.verify(TOKEN)).thenReturn(jwt);
         when(jwt.getClaim(
@@ -154,15 +163,15 @@ class LedgerWriterControllerTest {
     }
 
     @Test
-    @DisplayName("Given the transaction is internal and the transaction amount == sender balance, " +
+    @DisplayName("Given the transaction is internal and amount + fee == sender balance, " +
             "return HTTP Status 201")
-    void addTransactionSuccessWhenAmountEqualToBalance(TestInfo testInfo) {
-        // Given
+    void addTransactionSuccessWhenAmountPlusFeeEqualToBalance(TestInfo testInfo) {
+        // Given: amount=39, fee=ceil(39*0.005)=1, total=40 == SENDER_BALANCE
         LedgerWriterController spyLedgerWriterController =
                 spy(ledgerWriterController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromRoutingNum()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(transaction.getAmount()).thenReturn(SENDER_BALANCE);
+        when(transaction.getAmount()).thenReturn(AMOUNT_FITTING_WITH_FEE);
         when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
         doReturn(SENDER_BALANCE).when(
                 spyLedgerWriterController).getAvailableBalance(
@@ -366,6 +375,67 @@ class LedgerWriterControllerTest {
                 actualResult.getBody());
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR,
                 actualResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("computeFee rounds up to the nearest cent for non-zero amounts")
+    void computeFeeRoundsUp() {
+        // 1 cent: ceil(1 * 0.005) = ceil(0.005) = 1
+        assertEquals(1, LedgerWriterController.computeFee(1));
+        // 100 cents ($1.00): ceil(100 * 0.005) = ceil(0.5) = 1
+        assertEquals(1, LedgerWriterController.computeFee(100));
+        // 1000 cents ($10.00): ceil(1000 * 0.005) = ceil(5.0) = 5
+        assertEquals(5, LedgerWriterController.computeFee(1000));
+        // 201 cents ($2.01): ceil(201 * 0.005) = ceil(1.005) = 2
+        assertEquals(2, LedgerWriterController.computeFee(201));
+    }
+
+    @Test
+    @DisplayName("Given a successful transaction, both the payment and fee are saved to the ledger")
+    void addTransactionSavesFeeTransaction(TestInfo testInfo) {
+        // Given
+        LedgerWriterController spyLedgerWriterController =
+                spy(ledgerWriterController);
+        when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
+        when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(transaction.getAmount()).thenReturn(SMALLER_THAN_SENDER_BALANCE);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(SENDER_BALANCE).when(
+                spyLedgerWriterController).getAvailableBalance(
+                TOKEN, AUTHED_ACCOUNT_NUM);
+
+        // When
+        spyLedgerWriterController.addTransaction(BEARER_TOKEN, transaction);
+
+        // Then: save() must be called twice — once for the payment, once for the fee
+        verify(transactionRepository, times(2)).save(any(Transaction.class));
+    }
+
+    @Test
+    @DisplayName("Given the balance covers payment but not payment + fee, " +
+            "return HTTP Status 400")
+    void addTransactionFailWhenBalanceCoversPaymentButNotFee(TestInfo testInfo) {
+        // Given: balance=40, amount=40, fee=ceil(40*0.005)=1, total required=41 > 40
+        LedgerWriterController spyLedgerWriterController =
+                spy(ledgerWriterController);
+        when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
+        when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(transaction.getAmount()).thenReturn(SENDER_BALANCE);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(SENDER_BALANCE).when(
+                spyLedgerWriterController).getAvailableBalance(
+                TOKEN, AUTHED_ACCOUNT_NUM);
+
+        // When
+        final ResponseEntity actualResult =
+                spyLedgerWriterController.addTransaction(
+                        BEARER_TOKEN, transaction);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE,
+                actualResult.getBody());
+        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
     }
 
     @Test
