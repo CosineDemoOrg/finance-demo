@@ -15,6 +15,29 @@
  */
  
 document.addEventListener("DOMContentLoaded", function(event) {
+  // Transaction fee calculation
+  var paymentAmountInput = document.querySelector("#payment-amount");
+  var feeDisplay = document.querySelector("#fee-display");
+  var feeAmountInput = document.querySelector("#fee-amount");
+  var totalAmountInput = document.querySelector("#total-amount");
+  var TRANSACTION_FEE_RATE = 0.005;
+
+  if (paymentAmountInput) {
+    paymentAmountInput.addEventListener("input", function(e) {
+      var amount = parseFloat(e.target.value) || 0;
+      var fee = amount * TRANSACTION_FEE_RATE;
+      var total = amount + fee;
+
+      if (amount > 0) {
+        feeDisplay.style.display = "block";
+        feeAmountInput.value = fee.toFixed(2);
+        totalAmountInput.value = total.toFixed(2);
+      } else {
+        feeDisplay.style.display = "none";
+      }
+    });
+  }
+
   // Deposit modal client-side validation
   var depositForm = document.querySelector("#deposit-form");
   depositForm.addEventListener("submit", function(e) {
@@ -56,6 +79,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
     paymentCancel.addEventListener("click", function () {
       paymentForm.reset();
       paymentForm.classList.remove("was-validated");
+      if (feeDisplay) {
+        feeDisplay.style.display = "none";
+      }
       RefreshModals();
     });
   });

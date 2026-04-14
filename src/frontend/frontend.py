@@ -49,6 +49,7 @@ from traced_thread_pool_executor import TracedThreadPoolExecutor
 BALANCE_NAME = "balance"
 CONTACTS_NAME = "contacts"
 TRANSACTION_LIST_NAME = "transaction_list"
+TRANSACTION_FEE_RATE = 0.005
 
 # pylint: disable-msg=too-many-locals
 # pylint: disable-msg=too-many-branches
@@ -230,13 +231,30 @@ def create_app():
 
             user_input = request.form['amount']
             payment_amount = int(Decimal(user_input) * 100)
+
+            # Calculate 0.5% transaction fee
+            fee_amount = int(payment_amount * TRANSACTION_FEE_RATE)
+
             transaction_data = {"fromAccountNum": account_id,
                                 "fromRoutingNum": app.config['LOCAL_ROUTING'],
                                 "toAccountNum": recipient,
                                 "toRoutingNum": app.config['LOCAL_ROUTING'],
                                 "amount": payment_amount,
+                                "feeAmount": fee_amount,
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
+
+            # Submit fee transaction to bank fee account
+            if fee_amount > 0:
+                fee_transaction_data = {
+                    "fromAccountNum": account_id,
+                    "fromRoutingNum": app.config['LOCAL_ROUTING'],
+                    "toAccountNum": "0000000000",  # Bank fee account
+                    "toRoutingNum": app.config['LOCAL_ROUTING'],
+                    "amount": fee_amount,
+                    "uuid": request.form['uuid'] + "-fee"
+                }
+                _submit_transaction(fee_transaction_data)
             app.logger.info('Payment initiated successfully.')
             return redirect(code=303,
                             location=url_for('home',
