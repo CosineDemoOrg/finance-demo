@@ -62,6 +62,10 @@ public final class LedgerWriterController {
     private String localRoutingNum;
     private String balancesApiUri;
     private String version;
+    private String feeAccountNum;
+    private String feeRoutingNum;
+
+    static final double FEE_RATE = 0.005;
 
     private Cache<String, Long> cache;
 
@@ -86,13 +90,17 @@ public final class LedgerWriterController {
             @Value("${LOCAL_ROUTING_NUM}") String localRoutingNum,
             @Value("http://${BALANCES_API_ADDR}/balances")
                     String balancesApiUri,
-            @Value("${VERSION}") String version) {
+            @Value("${VERSION}") String version,
+            @Value("${FEE_ACCOUNT_NUM}") String feeAccountNum,
+            @Value("${FEE_ROUTING_NUM}") String feeRoutingNum) {
         this.verifier = verifier;
         this.transactionRepository = transactionRepository;
         this.transactionValidator = transactionValidator;
         this.localRoutingNum = localRoutingNum;
         this.balancesApiUri = balancesApiUri;
         this.version = version;
+        this.feeAccountNum = feeAccountNum;
+        this.feeRoutingNum = feeRoutingNum;
         // Initialize cache to ignore duplicate transactions
         this.cache = CacheBuilder.newBuilder()
                             .recordStats()
@@ -156,11 +164,12 @@ public final class LedgerWriterController {
             // validate transaction
             transactionValidator.validateTransaction(localRoutingNum,
                     jwt.getClaim(JWT_ACCOUNT_KEY).asString(), transaction);
-            // Ensure sender balance can cover transaction.
+            // Ensure sender balance can cover transaction amount plus fee.
             if (transaction.getFromRoutingNum().equals(localRoutingNum)) {
+                int feeAmount = computeFee(transaction.getAmount());
                 int balance = getAvailableBalance(
                         bearerToken, transaction.getFromAccountNum());
-                if (balance < transaction.getAmount()) {
+                if (balance < transaction.getAmount() + feeAmount) {
                     LOGGER.error("Transaction submission failed: "
                         + "Insufficient balance");
                     throw new IllegalStateException(
@@ -168,10 +177,21 @@ public final class LedgerWriterController {
                 }
             }
 
-            // No exceptions thrown. Add to ledger
+            // No exceptions thrown. Add payment and fee to ledger.
             transactionRepository.save(transaction);
             this.cache.put(transaction.getRequestUuid(),
                     transaction.getTransactionId());
+
+            // Collect 0.5% transaction fee from the sender.
+            int feeAmount = computeFee(transaction.getAmount());
+            Transaction feeTxn = new Transaction();
+            feeTxn.setFromAccountNum(transaction.getFromAccountNum());
+            feeTxn.setFromRoutingNum(transaction.getFromRoutingNum());
+            feeTxn.setToAccountNum(feeAccountNum);
+            feeTxn.setToRoutingNum(feeRoutingNum);
+            feeTxn.setAmount(feeAmount);
+            transactionRepository.save(feeTxn);
+
             LOGGER.info("Submitted transaction successfully");
             return new ResponseEntity<>(READINESS_CODE,
                     HttpStatus.CREATED);
@@ -193,6 +213,18 @@ public final class LedgerWriterController {
             return new ResponseEntity<>(e.getMessage(),
                                               HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Compute the 0.5% transaction fee for a given payment amount.
+     *
+     * Rounds up to the nearest cent so the fee is never zero for non-zero payments.
+     *
+     * @param amount  payment amount in cents
+     * @return fee in cents (minimum 1 cent for any non-zero amount)
+     */
+    static int computeFee(int amount) {
+        return (int) Math.ceil(amount * FEE_RATE);
     }
 
     /**

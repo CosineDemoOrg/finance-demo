@@ -77,20 +77,40 @@ public final class Transaction {
         return fromAccountNum;
     }
 
+    public void setFromAccountNum(String fromAccountNum) {
+        this.fromAccountNum = fromAccountNum;
+    }
+
     public String getFromRoutingNum() {
         return fromRoutingNum;
+    }
+
+    public void setFromRoutingNum(String fromRoutingNum) {
+        this.fromRoutingNum = fromRoutingNum;
     }
 
     public String getToAccountNum() {
         return toAccountNum;
     }
 
+    public void setToAccountNum(String toAccountNum) {
+        this.toAccountNum = toAccountNum;
+    }
+
     public String getToRoutingNum() {
         return toRoutingNum;
     }
 
+    public void setToRoutingNum(String toRoutingNum) {
+        this.toRoutingNum = toRoutingNum;
+    }
+
     public Integer getAmount() {
         return amount;
+    }
+
+    public void setAmount(Integer amount) {
+        this.amount = amount;
     }
 
     public String getRequestUuid() {
