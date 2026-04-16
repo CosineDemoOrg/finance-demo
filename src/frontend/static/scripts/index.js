@@ -70,6 +70,40 @@ document.addEventListener("DOMContentLoaded", function(event) {
     RefreshModals();
   });
 
+  const FEE_RATE = 0.005;
+
+  function formatUSD(cents) {
+    return "$" + (cents / 100).toFixed(2);
+  }
+
+  // Show live fee breakdown for the Send Payment modal
+  document.querySelector("#payment-amount").addEventListener("input", function() {
+    var gross = Math.round(parseFloat(this.value) * 100) || 0;
+    var breakdown = document.querySelector("#payment-fee-breakdown");
+    if (gross > 0) {
+      var fee = Math.round(gross * FEE_RATE);
+      document.querySelector("#payment-fee-amount").textContent = formatUSD(fee);
+      document.querySelector("#payment-net-amount").textContent = formatUSD(gross - fee);
+      breakdown.classList.remove("hidden");
+    } else {
+      breakdown.classList.add("hidden");
+    }
+  });
+
+  // Show live fee breakdown for the Deposit modal
+  document.querySelector("#deposit-amount").addEventListener("input", function() {
+    var gross = Math.round(parseFloat(this.value) * 100) || 0;
+    var breakdown = document.querySelector("#deposit-fee-breakdown");
+    if (gross > 0) {
+      var fee = Math.round(gross * FEE_RATE);
+      document.querySelector("#deposit-fee-amount").textContent = formatUSD(fee);
+      document.querySelector("#deposit-net-amount").textContent = formatUSD(gross - fee);
+      breakdown.classList.remove("hidden");
+    } else {
+      breakdown.classList.add("hidden");
+    }
+  });
+
 
   function uuidv4() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {

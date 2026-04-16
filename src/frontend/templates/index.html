@@ -51,6 +51,7 @@ limitations under the License.
       <!-- Top row - overview, account # -->
       <div class="row col-lg-12 align-items-start top-row">
         <div class="col-md-8">
+          <h1>Built for Engineers with taste</h1>
           <small class="text-uppercase text-muted secondary-text">Overview</small>
           <h2 class="header-title">Checking Account</h2>
         </div>
@@ -276,6 +277,16 @@ limitations under the License.
                           Please enter a valid amount.
                         </div>
                       </div>
+                      <div id="deposit-fee-breakdown" class="text-muted small hidden">
+                        <div class="d-flex justify-content-between">
+                          <span>Transaction fee (0.5%)</span>
+                          <span id="deposit-fee-amount"></span>
+                        </div>
+                        <div class="d-flex justify-content-between font-weight-bold">
+                          <span>Amount credited</span>
+                          <span id="deposit-net-amount"></span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -350,6 +361,16 @@ limitations under the License.
                       <input class="form-control amount-font" type="number" autocomplete="off" step="0.01" id="payment-amount" name="amount" placeholder="0.00" min="0.01" max="{{ balance / 100 if balance is not none }}" required>
                       <div class="invalid-feedback">
                         Please enter a valid amount.
+                      </div>
+                    </div>
+                    <div id="payment-fee-breakdown" class="text-muted small hidden">
+                      <div class="d-flex justify-content-between">
+                        <span>Transaction fee (0.5%)</span>
+                        <span id="payment-fee-amount"></span>
+                      </div>
+                      <div class="d-flex justify-content-between font-weight-bold">
+                        <span>Amount received</span>
+                        <span id="payment-net-amount"></span>
                       </div>
                     </div>
                   </div>

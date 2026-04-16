@@ -49,6 +49,7 @@ from traced_thread_pool_executor import TracedThreadPoolExecutor
 BALANCE_NAME = "balance"
 CONTACTS_NAME = "contacts"
 TRANSACTION_LIST_NAME = "transaction_list"
+TRANSACTION_FEE_RATE = Decimal('0.005')
 
 # pylint: disable-msg=too-many-locals
 # pylint: disable-msg=too-many-branches
@@ -229,7 +230,9 @@ def create_app():
                                  False)
 
             user_input = request.form['amount']
-            payment_amount = int(Decimal(user_input) * 100)
+            gross_amount = int(Decimal(user_input) * 100)
+            fee = int(gross_amount * TRANSACTION_FEE_RATE)
+            payment_amount = gross_amount - fee
             transaction_data = {"fromAccountNum": account_id,
                                 "fromRoutingNum": app.config['LOCAL_ROUTING'],
                                 "toAccountNum": recipient,
@@ -297,11 +300,13 @@ def create_app():
                 external_account_num = account_details['account_num']
                 external_routing_num = account_details['routing_num']
 
+            deposit_gross = int(Decimal(request.form['amount']) * 100)
+            deposit_fee = int(deposit_gross * TRANSACTION_FEE_RATE)
             transaction_data = {"fromAccountNum": external_account_num,
                                 "fromRoutingNum": external_routing_num,
                                 "toAccountNum": account_id,
                                 "toRoutingNum": app.config['LOCAL_ROUTING'],
-                                "amount": int(Decimal(request.form['amount']) * 100),
+                                "amount": deposit_gross - deposit_fee,
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
