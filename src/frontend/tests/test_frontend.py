@@ -204,11 +204,10 @@ class TestFrontend(unittest.TestCase):
         self.assertEqual(response.status_code, 303)
         self.assertIn('/home', response.headers['Location'])
 
-        # Verify fee calculation: gross=1000, fee=int(1000*0.005)=5, net=995
+        # Verify full gross amount is sent (fee applied by backend, not frontend)
         call_data = json.loads(mock_post.call_args[1]['data'])
         gross = int(Decimal('10.00') * 100)
-        fee = int(gross * Decimal('0.005'))
-        self.assertEqual(call_data['amount'], gross - fee)
+        self.assertEqual(call_data['amount'], gross)
 
     @patch('frontend.requests.post')
     def test_payment_invalid_amount(self, mock_post):
@@ -250,6 +249,11 @@ class TestFrontend(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 303)
         self.assertIn('/home', response.headers['Location'])
+
+        # Verify full gross amount is sent (fee applied by backend, not frontend)
+        call_data = json.loads(mock_post.call_args[1]['data'])
+        gross = int(Decimal('50.00') * 100)
+        self.assertEqual(call_data['amount'], gross)
 
     @patch('frontend.requests.post')
     def test_deposit_invalid_routing(self, mock_post):
