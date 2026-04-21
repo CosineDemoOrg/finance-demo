@@ -70,6 +70,34 @@ document.addEventListener("DOMContentLoaded", function(event) {
     RefreshModals();
   });
 
+  // Live fee preview for payment modal (1% fee on payments)
+  var paymentAmountInput = document.querySelector("#payment-amount");
+  var paymentFeeSpan = document.querySelector("#payment-fee");
+  var paymentTotalSpan = document.querySelector("#payment-total");
+  function formatCurrency(value) {
+    return "$" + value.toFixed(2);
+  }
+  function updateFeePreview() {
+    var amount = parseFloat(paymentAmountInput.value);
+    if (isNaN(amount) || amount <= 0) {
+      paymentFeeSpan.textContent = "$0.00";
+      paymentTotalSpan.textContent = "$0.00";
+      return;
+    }
+    var fee = Math.round(amount * 0.01 * 100) / 100;
+    var total = Math.round((amount + fee) * 100) / 100;
+    paymentFeeSpan.textContent = formatCurrency(fee);
+    paymentTotalSpan.textContent = formatCurrency(total);
+  }
+  paymentAmountInput.addEventListener("input", updateFeePreview);
+  // Reset preview when payment modal cancel is clicked
+  document.querySelectorAll(".payment-cancel").forEach((paymentCancel) => {
+    paymentCancel.addEventListener("click", function () {
+      paymentFeeSpan.textContent = "$0.00";
+      paymentTotalSpan.textContent = "$0.00";
+    });
+  });
+
 
   function uuidv4() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
