@@ -101,6 +101,30 @@ public final class Transaction {
         }
     }
 
+    public void setFromAccountNum(String fromAccountNum) {
+        this.fromAccountNum = fromAccountNum;
+    }
+
+    public void setFromRoutingNum(String fromRoutingNum) {
+        this.fromRoutingNum = fromRoutingNum;
+    }
+
+    public void setToAccountNum(String toAccountNum) {
+        this.toAccountNum = toAccountNum;
+    }
+
+    public void setToRoutingNum(String toRoutingNum) {
+        this.toRoutingNum = toRoutingNum;
+    }
+
+    public void setAmount(Integer amount) {
+        this.amount = amount;
+    }
+
+    public void setRequestUuid(String requestUuid) {
+        this.requestUuid = requestUuid;
+    }
+
     /**
      * String representation.
      *

@@ -21,9 +21,13 @@ import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTI
 import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_WHEN_AUTHORIZATION_HEADER_NULL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
@@ -39,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +52,22 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 class LedgerWriterControllerTest {
+
+    private static void setField(Object target, String name, Object value)
+            throws Exception {
+        Class<?> cls = target.getClass();
+        while (cls != null) {
+            try {
+                java.lang.reflect.Field f = cls.getDeclaredField(name);
+                f.setAccessible(true);
+                f.set(target, value);
+                return;
+            } catch (NoSuchFieldException e) {
+                cls = cls.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
+    }
 
     private LedgerWriterController ledgerWriterController;
 
@@ -402,5 +423,109 @@ class LedgerWriterControllerTest {
                 EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION,
                 duplicateResult.getBody());
         assertEquals(HttpStatus.BAD_REQUEST, duplicateResult.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Given an outgoing local transaction, charge 1% fee and " +
+            "save both the original transaction and the fee transaction")
+    void addTransactionLocalChargesFeeAndSavesTwice(TestInfo testInfo)
+            throws Exception {
+        // Given
+        LedgerWriterController spyLedgerWriterController =
+                spy(ledgerWriterController);
+        setField(spyLedgerWriterController, "feePercentBps", 100);
+        setField(spyLedgerWriterController, "feeAccountNum", "9099999999");
+        setField(spyLedgerWriterController, "feeRoutingNum", LOCAL_ROUTING_NUM);
+        when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
+        when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(transaction.getAmount()).thenReturn(10000);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(10100).when(
+                spyLedgerWriterController).getAvailableBalance(
+                TOKEN, AUTHED_ACCOUNT_NUM);
+
+        // When
+        final ResponseEntity actualResult =
+                spyLedgerWriterController.addTransaction(
+                        BEARER_TOKEN, transaction);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(ledgerWriterController.READINESS_CODE,
+                actualResult.getBody());
+        assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
+
+        ArgumentCaptor<Transaction> captor =
+                ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository, times(2)).save(captor.capture());
+        assertEquals(2, captor.getAllValues().size());
+        assertEquals(transaction, captor.getAllValues().get(0));
+
+        Transaction feeTxn = captor.getAllValues().get(1);
+        assertEquals(100, feeTxn.getAmount());
+        assertEquals(AUTHED_ACCOUNT_NUM, feeTxn.getFromAccountNum());
+        assertEquals("9099999999", feeTxn.getToAccountNum());
+        assertEquals(LOCAL_ROUTING_NUM, feeTxn.getFromRoutingNum());
+        assertEquals(LOCAL_ROUTING_NUM, feeTxn.getToRoutingNum());
+        assertEquals(testInfo.getDisplayName() + "-fee",
+                feeTxn.getRequestUuid());
+    }
+
+    @Test
+    @DisplayName("Given an outgoing local transaction where balance is less " +
+            "than amount + fee, return HTTP 400 and do not save")
+    void addTransactionLocalRejectsWhenBalanceLessThanAmountPlusFee(
+            TestInfo testInfo) throws Exception {
+        // Given
+        LedgerWriterController spyLedgerWriterController =
+                spy(ledgerWriterController);
+        setField(spyLedgerWriterController, "feePercentBps", 100);
+        setField(spyLedgerWriterController, "feeAccountNum", "9099999999");
+        setField(spyLedgerWriterController, "feeRoutingNum", LOCAL_ROUTING_NUM);
+        when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
+        when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
+        when(transaction.getAmount()).thenReturn(10000);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(10000).when(
+                spyLedgerWriterController).getAvailableBalance(
+                TOKEN, AUTHED_ACCOUNT_NUM);
+
+        // When
+        final ResponseEntity actualResult =
+                spyLedgerWriterController.addTransaction(
+                        BEARER_TOKEN, transaction);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE,
+                actualResult.getBody());
+        assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
+        verify(transactionRepository, never()).save(any(Transaction.class));
+    }
+
+    @Test
+    @DisplayName("Given a deposit transaction (non-local fromRoutingNum), " +
+            "charge no fee and save only the original transaction")
+    void addTransactionDepositDoesNotChargeFee(TestInfo testInfo)
+            throws Exception {
+        // Given
+        setField(ledgerWriterController, "feePercentBps", 100);
+        setField(ledgerWriterController, "feeAccountNum", "9099999999");
+        setField(ledgerWriterController, "feeRoutingNum", LOCAL_ROUTING_NUM);
+        when(transaction.getFromRoutingNum()).thenReturn(NON_LOCAL_ROUTING_NUM);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+
+        // When
+        final ResponseEntity actualResult =
+                ledgerWriterController.addTransaction(
+                        BEARER_TOKEN, transaction);
+
+        // Then
+        assertNotNull(actualResult);
+        assertEquals(ledgerWriterController.READINESS_CODE,
+                actualResult.getBody());
+        assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
+        verify(transactionRepository, times(1)).save(transaction);
+        verify(transactionRepository, times(1)).save(any(Transaction.class));
     }
 }

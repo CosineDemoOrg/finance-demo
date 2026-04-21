@@ -63,11 +63,21 @@ public final class LedgerWriterController {
     private String balancesApiUri;
     private String version;
 
+    @Value("${ledger.fee.percentBps:100}")
+    private int feePercentBps;
+
+    @Value("${ledger.fee.accountNum:9099999999}")
+    private String feeAccountNum;
+
+    @Value("${ledger.fee.routingNum:${LOCAL_ROUTING_NUM}}")
+    private String feeRoutingNum;
+
     private Cache<String, Long> cache;
 
     public static final String READINESS_CODE = "ok";
     public static final String UNAUTHORIZED_CODE = "not authorized";
     public static final String JWT_ACCOUNT_KEY = "acct";
+    private static final int BPS_DIVISOR = 10000;
 
     @Autowired
     RestTemplate restTemplate;
@@ -157,10 +167,16 @@ public final class LedgerWriterController {
             transactionValidator.validateTransaction(localRoutingNum,
                     jwt.getClaim(JWT_ACCOUNT_KEY).asString(), transaction);
             // Ensure sender balance can cover transaction.
-            if (transaction.getFromRoutingNum().equals(localRoutingNum)) {
+            final boolean outgoingLocal =
+                    transaction.getFromRoutingNum().equals(localRoutingNum);
+            int fee = 0;
+            if (outgoingLocal) {
+                fee = (int) Math.max(0L, Math.round(
+                        transaction.getAmount()
+                                * (feePercentBps / (double) BPS_DIVISOR)));
                 int balance = getAvailableBalance(
                         bearerToken, transaction.getFromAccountNum());
-                if (balance < transaction.getAmount()) {
+                if (balance < transaction.getAmount() + fee) {
                     LOGGER.error("Transaction submission failed: "
                         + "Insufficient balance");
                     throw new IllegalStateException(
@@ -170,6 +186,22 @@ public final class LedgerWriterController {
 
             // No exceptions thrown. Add to ledger
             transactionRepository.save(transaction);
+            if (outgoingLocal && fee > 0) {
+                String feeUuid = transaction.getRequestUuid() + "-fee";
+                if (!this.cache.asMap().containsKey(feeUuid)) {
+                    Transaction feeTxn = new Transaction();
+                    feeTxn.setFromAccountNum(transaction.getFromAccountNum());
+                    feeTxn.setFromRoutingNum(localRoutingNum);
+                    feeTxn.setToAccountNum(feeAccountNum);
+                    feeTxn.setToRoutingNum(feeRoutingNum);
+                    feeTxn.setAmount(fee);
+                    feeTxn.setRequestUuid(feeUuid);
+                    transactionRepository.save(feeTxn);
+                    this.cache.put(feeUuid, feeTxn.getTransactionId());
+                    LOGGER.info("Charged transaction fee of " + fee
+                            + " cents to account " + feeAccountNum);
+                }
+            }
             this.cache.put(transaction.getRequestUuid(),
                     transaction.getTransactionId());
             LOGGER.info("Submitted transaction successfully");
