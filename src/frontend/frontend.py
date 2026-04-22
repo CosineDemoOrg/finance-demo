@@ -49,7 +49,7 @@ from traced_thread_pool_executor import TracedThreadPoolExecutor
 BALANCE_NAME = "balance"
 CONTACTS_NAME = "contacts"
 TRANSACTION_LIST_NAME = "transaction_list"
-TRANSACTION_FEE_RATE = Decimal('0.007')
+TRANSACTION_FEE_RATE = Decimal('0.011')
 
 # pylint: disable-msg=too-many-locals
 # pylint: disable-msg=too-many-branches

@@ -610,5 +610,71 @@ class TestFrontend(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class TestFeeChangeBanner(unittest.TestCase):
+    """Tests for the fee change notification banner on the home page."""
+
+    def setUp(self):
+        """Set up Flask test client with mocked dependencies (same pattern as TestFrontend)."""
+        real_open = open
+
+        def _selective_open(path, *args, **kwargs):
+            if isinstance(path, str) and path == MOCKED_ENV_VARS["PUB_KEY_PATH"]:
+                return mock_open(read_data=EXAMPLE_PUBLIC_KEY.decode('utf-8'))()
+            return real_open(path, *args, **kwargs)
+
+        with patch("builtins.open", side_effect=_selective_open):
+            with patch.dict("os.environ", MOCKED_ENV_VARS):
+                with patch("requests.get") as mock_get:
+                    mock_get.return_value.ok = False
+                    frontend_mod = _load_frontend_module()
+                    self.flask_app = frontend_mod.create_app()
+                    self.app_module = frontend_mod
+
+        self.flask_app.config["TESTING"] = True
+        self.flask_app.config["PUBLIC_KEY"] = EXAMPLE_PUBLIC_KEY
+        self.test_app = self.flask_app.test_client()
+
+    @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
+    @patch('api_call.get')
+    def test_fee_change_banner_present_on_home_page(self, mock_api_get):
+        """Banner with id='fee-change-notice' is present on the home page for authenticated users."""
+        # Pass balance as an int so format_currency can render without error.
+        mock_api_get.side_effect = _mock_api_get_side_effect(balance=50000)
+
+        self.test_app.set_cookie('token', EXAMPLE_TOKEN)
+        response = self.test_app.get('/home')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'fee-change-notice', response.data)
+
+    @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
+    @patch('api_call.get')
+    def test_fee_change_banner_contains_correct_message(self, mock_api_get):
+        """Banner contains the correct fee change message mentioning 1.1% and next week."""
+        mock_api_get.side_effect = _mock_api_get_side_effect(balance=50000)
+
+        self.test_app.set_cookie('token', EXAMPLE_TOKEN)
+        response = self.test_app.get('/home')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'1.1%', response.data)
+        self.assertIn(b'next week', response.data)
+
+    @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
+    @patch('api_call.get')
+    def test_fee_change_banner_is_dismissible(self, mock_api_get):
+        """Banner has the alert-dismissible class and a close button."""
+        mock_api_get.side_effect = _mock_api_get_side_effect(balance=50000)
+
+        self.test_app.set_cookie('token', EXAMPLE_TOKEN)
+        response = self.test_app.get('/home')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'alert-dismissible', response.data)
+        self.assertIn(b'data-dismiss="alert"', response.data)
+
+    def test_fee_rate_constant_is_1_1_percent(self):
+        """TRANSACTION_FEE_RATE constant is 0.011 (1.1%)."""
+        from decimal import Decimal
+        self.assertEqual(self.app_module.TRANSACTION_FEE_RATE, Decimal('0.011'))
+
+
 if __name__ == '__main__':
     unittest.main()

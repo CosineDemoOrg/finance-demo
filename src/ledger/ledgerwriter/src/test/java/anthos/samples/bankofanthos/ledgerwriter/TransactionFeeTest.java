@@ -124,7 +124,7 @@ class TransactionFeeTest {
 
     @Test
     @DisplayName("Given amount is $100 (10000 cents), " +
-            "fee is 70 cents, total amount is 10070")
+            "fee is 110 cents (1.1%), total amount is 10110")
     void feeOnOneHundredDollars(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -133,7 +133,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        doReturn(10070).when(spyController).getAvailableBalance(
+        doReturn(10110).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -143,12 +143,12 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(10070);
+        verify(transaction).setAmount(10110);
     }
 
     @Test
     @DisplayName("Given amount is $1000 (100000 cents), " +
-            "fee is 700 cents, total amount is 100700")
+            "fee is 1100 cents (1.1%), total amount is 101100")
     void feeOnOneThousandDollars(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -157,7 +157,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(100000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        doReturn(100700).when(spyController).getAvailableBalance(
+        doReturn(101100).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -167,7 +167,7 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(100700);
+        verify(transaction).setAmount(101100);
     }
 
     @Test
@@ -181,7 +181,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        // Balance of 10050 covers 10000 but not 10000+70=10070
+        // Balance of 10050 covers 10000 but not 10000+110=10110 (1.1% fee)
         doReturn(10050).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
@@ -207,8 +207,8 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        // Balance of 10070 exactly covers 10000+70=10070
-        doReturn(10070).when(spyController).getAvailableBalance(
+        // Balance of 10110 exactly covers 10000+110=10110 (1.1% fee)
+        doReturn(10110).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -223,14 +223,14 @@ class TransactionFeeTest {
     }
 
     @Test
-    @DisplayName("Given amount is 143 cents, " +
-            "fee rounds to 1, total amount is 144")
+    @DisplayName("Given amount is 91 cents, " +
+            "fee rounds to 1 (1.1% of 91 = 1.001), total amount is 92")
     void feeRoundsCorrectly(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
-        when(transaction.getAmount()).thenReturn(143);
+        when(transaction.getAmount()).thenReturn(91);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
         doReturn(200).when(spyController).getAvailableBalance(
@@ -243,12 +243,12 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(144);
+        verify(transaction).setAmount(92);
     }
 
     @Test
     @DisplayName("Given amount is $100,000 (10000000 cents), " +
-            "fee is 70000 cents, total amount is 10070000")
+            "fee is 110000 cents (1.1%), total amount is 10110000")
     void feeOnLargeAmount(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -257,7 +257,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        doReturn(10070000).when(spyController).getAvailableBalance(
+        doReturn(10110000).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -267,6 +267,6 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(10070000);
+        verify(transaction).setAmount(10110000);
     }
 }
