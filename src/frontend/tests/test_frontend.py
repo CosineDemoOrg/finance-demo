@@ -649,14 +649,14 @@ class TestFeeChangeBanner(unittest.TestCase):
     @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
     @patch('api_call.get')
     def test_fee_change_banner_contains_correct_message(self, mock_api_get):
-        """Banner contains the correct fee change message mentioning 1.1% and next week."""
+        """Banner contains the correct fee change message mentioning 0.5%."""
         mock_api_get.side_effect = _mock_api_get_side_effect(balance=50000)
 
         self.test_app.set_cookie('token', EXAMPLE_TOKEN)
         response = self.test_app.get('/home')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'0.5%', response.data)
-        self.assertIn(b'next week', response.data)
+        self.assertIn(b'effective immediately', response.data)
 
     @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
     @patch('api_call.get')

@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     if (gross > 0) {
       var fee = Math.round(gross * FEE_RATE);
       document.querySelector("#payment-fee-amount").textContent = formatUSD(fee);
-      document.querySelector("#payment-net-amount").textContent = formatUSD(gross - fee);
+      document.querySelector("#payment-net-amount").textContent = formatUSD(gross + fee);
       breakdown.classList.remove("hidden");
     } else {
       breakdown.classList.add("hidden");
@@ -97,7 +97,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     if (gross > 0) {
       var fee = Math.round(gross * FEE_RATE);
       document.querySelector("#deposit-fee-amount").textContent = formatUSD(fee);
-      document.querySelector("#deposit-net-amount").textContent = formatUSD(gross - fee);
+      document.querySelector("#deposit-net-amount").textContent = formatUSD(gross + fee);
       breakdown.classList.remove("hidden");
     } else {
       breakdown.classList.add("hidden");
