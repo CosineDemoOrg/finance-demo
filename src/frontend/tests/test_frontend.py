@@ -655,7 +655,7 @@ class TestFeeChangeBanner(unittest.TestCase):
         self.test_app.set_cookie('token', EXAMPLE_TOKEN)
         response = self.test_app.get('/home')
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'1.1%', response.data)
+        self.assertIn(b'0.5%', response.data)
         self.assertIn(b'next week', response.data)
 
     @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
@@ -670,10 +670,10 @@ class TestFeeChangeBanner(unittest.TestCase):
         self.assertIn(b'alert-dismissible', response.data)
         self.assertIn(b'data-dismiss="alert"', response.data)
 
-    def test_fee_rate_constant_is_1_1_percent(self):
-        """TRANSACTION_FEE_RATE constant is 0.011 (1.1%)."""
+    def test_fee_rate_constant_is_zero_point_five_percent(self):
+        """TRANSACTION_FEE_RATE constant is 0.005 (0.5%)."""
         from decimal import Decimal
-        self.assertEqual(self.app_module.TRANSACTION_FEE_RATE, Decimal('0.011'))
+        self.assertEqual(self.app_module.TRANSACTION_FEE_RATE, Decimal('0.005'))
 
 
 if __name__ == '__main__':
