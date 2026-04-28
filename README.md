@@ -129,6 +129,24 @@ The following button opens up an interactive tutorial showing how to deploy Bank
 - **Anthos Service Mesh**: ASM requires Workload Identity to be enabled in your GKE cluster. [See the workload identity instructions](/docs/workload-identity.md) to configure and deploy the app. Then, apply `extras/istio/` to your cluster to configure frontend ingress.
 - **Java Monolith (VM)**: We provide a version of this app where the three Java microservices are coupled together into one monolithic service, which you can deploy inside a VM (eg. Google Compute Engine). See the [ledgermonolith](/src/ledgermonolith) directory.
 
+## Local frontend iteration
+
+When editing the home page or other frontend templates, the running app at `http://localhost:8080` is usually served through `kubectl port-forward` from the local kind cluster. Because the frontend deployment uses `imagePullPolicy: Never`, rebuild and load the image after template changes:
+
+```sh
+docker build -t cosinedemo-frontend:latest src/frontend
+kind load docker-image cosinedemo-frontend:latest --name bank-of-anthos
+kubectl rollout restart deployment/frontend
+kubectl rollout status deployment/frontend --timeout=120s
+kubectl port-forward service/frontend 8080:80
+```
+
+To confirm a template change reached the pod, inspect the deployed file directly:
+
+```sh
+kubectl exec deploy/frontend -- grep -n "text to check" /app/templates/index.html
+```
+
 ## Documentation
 
 <!-- This section is duplicated in the docs/ README: https://github.com/GoogleCloudPlatform/bank-of-anthos/blob/main/docs/README.md -->
