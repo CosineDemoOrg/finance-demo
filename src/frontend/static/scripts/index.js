@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     RefreshModals();
   });
 
-  const FEE_RATE = 0.005;
+  const FEE_RATE = 0.015;
 
   function formatUSD(cents) {
     return "$" + (cents / 100).toFixed(2);
@@ -84,9 +84,9 @@ document.addEventListener("DOMContentLoaded", function(event) {
       var fee = Math.round(gross * FEE_RATE);
       document.querySelector("#payment-fee-amount").textContent = formatUSD(fee);
       document.querySelector("#payment-net-amount").textContent = formatUSD(gross + fee);
-      breakdown.classList.remove("hidden");
     } else {
-      breakdown.classList.add("hidden");
+      document.querySelector("#payment-fee-amount").textContent = "$0.00";
+      document.querySelector("#payment-net-amount").textContent = "$0.00";
     }
   });
 
@@ -97,10 +97,10 @@ document.addEventListener("DOMContentLoaded", function(event) {
     if (gross > 0) {
       var fee = Math.round(gross * FEE_RATE);
       document.querySelector("#deposit-fee-amount").textContent = formatUSD(fee);
-      document.querySelector("#deposit-net-amount").textContent = formatUSD(gross + fee);
-      breakdown.classList.remove("hidden");
+      document.querySelector("#deposit-net-amount").textContent = formatUSD(gross - fee);
     } else {
-      breakdown.classList.add("hidden");
+      document.querySelector("#deposit-fee-amount").textContent = "$0.00";
+      document.querySelector("#deposit-net-amount").textContent = "$0.00";
     }
   });
 

@@ -19,7 +19,7 @@ FROM base as builder
 
 # Install dependencies.
 COPY requirements.txt .
-RUN pip install --prefix="/install" -r requirements.txt
+RUN echo "setuptools<81" > /tmp/constraints.txt && pip install --prefix="/install" -c /tmp/constraints.txt -r requirements.txt
 
 FROM base
 

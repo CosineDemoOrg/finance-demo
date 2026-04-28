@@ -85,6 +85,7 @@ public final class LedgerMonolithController {
     public static final String READINESS_CODE = "ok";
     public static final String UNAUTHORIZED_CODE = "not authorized";
     public static final String JWT_ACCOUNT_KEY = "acct";
+    static final double TRANSACTION_FEE_RATE = 0.015;
 
     @Autowired
     RestTemplate restTemplate;
@@ -253,16 +254,23 @@ public final class LedgerMonolithController {
             // validate transaction
             transactionValidator.validateTransaction(localRoutingNum,
                     jwt.getClaim(JWT_ACCOUNT_KEY).asString(), transaction);
-            // Ensure sender balance can cover transaction.
+            // Apply transaction fee
+            final int fee = (int) Math.round(
+                    transaction.getAmount() * TRANSACTION_FEE_RATE);
+            final int totalAmount = transaction.getAmount() + fee;
+            // Ensure sender balance can cover transaction plus fee.
             if (transaction.getFromRoutingNum().equals(localRoutingNum)) {
                 Long balance = getAvailableBalance(transaction.getFromAccountNum());
-                if (balance < transaction.getAmount()) {
+                if (balance < totalAmount) {
                     LOGGER.error("Transaction submission failed: "
                         + "Insufficient balance");
                     throw new IllegalStateException(
                             EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE);
                 }
             }
+
+            // Set the amount to include the fee before saving
+            transaction.setAmount(totalAmount);
             // No exceptions thrown. Add to ledger
             transactionRepository.save(transaction);
             this.ledgerWriterCache.put(transaction.getRequestUuid(),
