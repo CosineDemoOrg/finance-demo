@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package anthos.samples.bankofanthos.ledgerwriter;
+package anthos.samples.bankofanthos.ledgermonolith;
 
-import static anthos.samples.bankofanthos.ledgerwriter.ExceptionMessages.EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE;
+import static anthos.samples.bankofanthos.ledgermonolith.ExceptionMessages.EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -28,10 +30,7 @@ import static org.mockito.MockitoAnnotations.initMocks;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.interfaces.Claim;
 import com.auth0.jwt.interfaces.DecodedJWT;
-import io.micrometer.core.instrument.Clock;
-import io.micrometer.core.lang.Nullable;
-import io.micrometer.stackdriver.StackdriverConfig;
-import io.micrometer.stackdriver.StackdriverMeterRegistry;
+import com.google.common.cache.LoadingCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,26 +41,19 @@ import org.springframework.http.ResponseEntity;
 
 class TransactionFeeTest {
 
-    private LedgerWriterController ledgerWriterController;
+    private LedgerMonolithController ledgerMonolithController;
 
-    @Mock
-    private TransactionValidator transactionValidator;
-    @Mock
-    private TransactionRepository transactionRepository;
-    @Mock
-    private JWTVerifier verifier;
-    @Mock
-    private Transaction transaction;
-    @Mock
-    private DecodedJWT jwt;
-    @Mock
-    private Claim claim;
-    @Mock
-    private Clock clock;
+    @Mock private TransactionValidator transactionValidator;
+    @Mock private TransactionRepository transactionRepository;
+    @Mock private JWTVerifier verifier;
+    @Mock private Transaction transaction;
+    @Mock private DecodedJWT jwt;
+    @Mock private Claim claim;
+    @Mock private LedgerReader ledgerReader;
+    @Mock private LoadingCache<String, AccountInfo> ledgerReaderCache;
 
     private static final String VERSION = "v0.1.0";
     private static final String LOCAL_ROUTING_NUM = "123456789";
-    private static final String BALANCES_API_ADDR = "balancereader:8080";
     private static final String AUTHED_ACCOUNT_NUM = "1234567890";
     private static final String BEARER_TOKEN = "Bearer abc";
     private static final String TOKEN = "abc";
@@ -69,54 +61,36 @@ class TransactionFeeTest {
     @BeforeEach
     void setUp() {
         initMocks(this);
-        StackdriverMeterRegistry meterRegistry = new StackdriverMeterRegistry(
-                new StackdriverConfig() {
-                    @Override
-                    public boolean enabled() {
-                        return false;
-                    }
+        doNothing().when(ledgerReader).startWithCallback(any());
 
-                    @Override
-                    public String projectId() {
-                        return "test";
-                    }
-
-                    @Override
-                    @Nullable
-                    public String get(String key) {
-                        return null;
-                    }
-                }, clock);
-
-        ledgerWriterController = new LedgerWriterController(verifier,
-                meterRegistry,
-                transactionRepository, transactionValidator,
-                LOCAL_ROUTING_NUM, BALANCES_API_ADDR, VERSION);
+        ledgerMonolithController = new LedgerMonolithController(
+                "unused-pub-key-path",
+                ledgerReaderCache,
+                verifier,
+                transactionRepository,
+                transactionValidator,
+                ledgerReader,
+                LOCAL_ROUTING_NUM,
+                VERSION);
 
         when(verifier.verify(TOKEN)).thenReturn(jwt);
-        when(jwt.getClaim(
-                LedgerWriterController.JWT_ACCOUNT_KEY)).thenReturn(claim);
+        when(jwt.getClaim(LedgerMonolithController.JWT_ACCOUNT_KEY)).thenReturn(claim);
+        when(claim.asString()).thenReturn(AUTHED_ACCOUNT_NUM);
     }
 
     @Test
-    @DisplayName("Given amount is 1 cent, fee rounds to 0, " +
-            "total amount is 1")
+    @DisplayName("Given amount is 1 cent, fee rounds to 0, total amount is 1")
     void feeIsAppliedOnSmallAmount(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(1);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
-        doReturn(100).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(100L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
         verify(transaction).setAmount(1);
@@ -126,21 +100,16 @@ class TransactionFeeTest {
     @DisplayName("Given amount is $100 (10000 cents), " +
             "fee is 60 cents (0.6%), total amount is 10060")
     void feeOnOneHundredDollars(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
-        doReturn(10060).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(10060L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
         verify(transaction).setAmount(10060);
@@ -150,21 +119,16 @@ class TransactionFeeTest {
     @DisplayName("Given amount is $1000 (100000 cents), " +
             "fee is 600 cents (0.6%), total amount is 100600")
     void feeOnOneThousandDollars(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(100000);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
-        doReturn(100600).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(100600L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
         verify(transaction).setAmount(100600);
@@ -174,51 +138,38 @@ class TransactionFeeTest {
     @DisplayName("Given balance covers amount but not amount+fee, " +
             "return HTTP Status 400 insufficient balance")
     void insufficientBalanceWhenFeeExceedsMargin(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
         // Balance of 10050 covers 10000 but not 10000+60=10060 (0.6% fee)
-        doReturn(10050).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        doReturn(10050L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
-        assertEquals(EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE,
-                actualResult.getBody());
+        assertEquals(EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE, actualResult.getBody());
         assertEquals(HttpStatus.BAD_REQUEST, actualResult.getStatusCode());
     }
 
     @Test
-    @DisplayName("Given balance exactly covers amount+fee, " +
-            "return HTTP Status 201")
+    @DisplayName("Given balance exactly covers amount+fee, return HTTP Status 201")
     void sufficientBalanceWhenFeeIncludedExactly(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
         // Balance of 10060 exactly covers 10000+60=10060 (0.6% fee)
-        doReturn(10060).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        doReturn(10060L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
-        assertEquals(LedgerWriterController.READINESS_CODE,
-                actualResult.getBody());
+        assertEquals(LedgerMonolithController.READINESS_CODE, actualResult.getBody());
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
     }
 
@@ -226,21 +177,16 @@ class TransactionFeeTest {
     @DisplayName("Given amount is 150 cents, " +
             "fee rounds to 1 (0.6% of 150 = 0.9), total amount is 151")
     void feeRoundsCorrectly(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(150);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
-        doReturn(200).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(200L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
         verify(transaction).setAmount(151);
@@ -250,21 +196,16 @@ class TransactionFeeTest {
     @DisplayName("Given amount is $100,000 (10000000 cents), " +
             "fee is 60000 cents (0.6%), total amount is 10060000")
     void feeOnLargeAmount(TestInfo testInfo) {
-        // Given
-        LedgerWriterController spyController = spy(ledgerWriterController);
+        LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000000);
-        when(transaction.getRequestUuid()).thenReturn(
-                testInfo.getDisplayName());
-        doReturn(10060000).when(spyController).getAvailableBalance(
-                TOKEN, AUTHED_ACCOUNT_NUM);
+        when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
+        doReturn(10060000L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
-        // When
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
-        // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
         verify(transaction).setAmount(10060000);

@@ -93,6 +93,10 @@ public final class Transaction {
         return amount;
     }
 
+    public void setAmount(Integer amount) {
+        this.amount = amount;
+    }
+
     public String getRequestUuid() {
         if (requestUuid == null) {
             return "";

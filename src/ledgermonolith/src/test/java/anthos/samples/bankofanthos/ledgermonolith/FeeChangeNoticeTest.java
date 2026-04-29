@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package anthos.samples.bankofanthos.ledgerwriter;
+package anthos.samples.bankofanthos.ledgermonolith;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -22,21 +22,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests verifying the 0.6% transaction fee rate.
+ * Tests verifying the 0.6% transaction fee rate in the ledger monolith.
  */
 class FeeChangeNoticeTest {
 
     @Test
     @DisplayName("Transaction fee rate is set to 0.6%")
     void feeRateIsZeroPointSixPercent() {
-        assertEquals(0.006, LedgerWriterController.TRANSACTION_FEE_RATE, 1e-9);
+        assertEquals(0.006, LedgerMonolithController.TRANSACTION_FEE_RATE, 1e-9);
     }
 
     @Test
     @DisplayName("0.6% fee on $10 payment is 6 cents")
     void feeOnTenDollarsIsSixCents() {
         int amount = 1000; // $10 in cents
-        int fee = (int) Math.round(amount * LedgerWriterController.TRANSACTION_FEE_RATE);
+        int fee = (int) Math.round(amount * LedgerMonolithController.TRANSACTION_FEE_RATE);
         assertEquals(6, fee);
     }
 
@@ -44,7 +44,7 @@ class FeeChangeNoticeTest {
     @DisplayName("0.6% fee on $100 payment is $0.60")
     void feeOnOneHundredDollarsIsSixtyCents() {
         int amount = 10000; // $100 in cents
-        int fee = (int) Math.round(amount * LedgerWriterController.TRANSACTION_FEE_RATE);
+        int fee = (int) Math.round(amount * LedgerMonolithController.TRANSACTION_FEE_RATE);
         assertEquals(60, fee);
     }
 
@@ -52,7 +52,7 @@ class FeeChangeNoticeTest {
     @DisplayName("0.6% fee on $1000 payment is $6.00")
     void feeOnOneThousandDollarsIsSixDollars() {
         int amount = 100000; // $1000 in cents
-        int fee = (int) Math.round(amount * LedgerWriterController.TRANSACTION_FEE_RATE);
+        int fee = (int) Math.round(amount * LedgerMonolithController.TRANSACTION_FEE_RATE);
         assertEquals(600, fee);
     }
 }
