@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cosine — Team Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e4e4ef;
+    --text-dim: #8888a0;
+    --accent: #6c5ce7;
+    --green: #00d68f;
+    --green-dim: rgba(0, 214, 143, 0.12);
+    --amber: #f0a500;
+    --amber-dim: rgba(240, 165, 0, 0.12);
+    --blue: #339af0;
+    --blue-dim: rgba(51, 154, 240, 0.12);
+    --pink: #e84393;
+    --pink-dim: rgba(232, 67, 147, 0.12);
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; zoom: 0.8; }
+  .dashboard { max-width: 1320px; margin: 0 auto; padding: 30px 18px 64px; }
+
+  .header { text-align: center; margin-bottom: 12px; }
+  .header .logo { font-size: 13px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .header h1 { font-size: 32px; font-weight: 900; letter-spacing: -0.5px; background: linear-gradient(135deg, #e4e4ef 0%, #6c5ce7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .header .subtitle { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+
+  /* Main nav tabs */
+  .main-nav { display: flex; justify-content: center; gap: 4px; margin-bottom: 32px; background: var(--surface-2); border-radius: 12px; padding: 5px; width: fit-content; margin-left: auto; margin-right: auto; }
+  .main-nav-btn { background: transparent; border: none; color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 700; padding: 9px 22px; border-radius: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px; }
+  .main-nav-btn.active { background: var(--accent); color: #fff; }
+  .main-nav-btn:hover:not(.active) { color: var(--text); background: rgba(108,92,231,0.1); }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .section-title { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 18px; margin-top: 48px; }
+  .section-title:first-child { margin-top: 0; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; position: relative; overflow: hidden; transition: transform 0.2s, border-color 0.2s; }
+  .kpi-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .kpi-card .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .kpi-card .kpi-value { font-size: 30px; font-weight: 900; letter-spacing: -1px; line-height: 1; }
+  .kpi-card .kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .kpi-card .kpi-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 6px; margin-top: 8px; }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-amber { background: var(--amber-dim); color: var(--amber); }
+  .badge-blue { background: var(--blue-dim); color: var(--blue); }
+  .badge-pink { background: var(--pink-dim); color: var(--pink); }
+  .kpi-card .glow { position: absolute; top: -40px; right: -40px; width: 100px; height: 100px; border-radius: 50%; filter: blur(40px); opacity: 0.4; pointer-events: none; }
+
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .chart-row.full { grid-template-columns: 1fr; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+  .chart-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .chart-card .chart-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
+  .chart-wrap { position: relative; height: 280px; }
+
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface-2); border-radius: 10px; padding: 4px; width: fit-content; }
+  .tab-btn { background: transparent; border: none; color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+  .tab-btn.active { background: var(--accent); color: #fff; }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  .leaderboard { width: 100%; border-collapse: collapse; }
+  .leaderboard th { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .leaderboard td { font-size: 14px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .leaderboard tr:last-child td { border-bottom: none; }
+  .leaderboard tr:hover td { background: var(--surface-2); }
+  .rank-cell { font-weight: 800; font-size: 16px; width: 50px; }
+  .rank-1 { color: #ffd700; } .rank-2 { color: #c0c0c0; } .rank-3 { color: #cd7f32; }
+  .user-email { font-weight: 600; color: var(--text); }
+  .score-bar-cell { width: 30%; }
+  .score-bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .score-bar-bg { flex: 1; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .score-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--blue)); border-radius: 3px; transition: width 0.6s ease; }
+  .score-val { font-weight: 700; font-size: 13px; color: var(--accent); min-width: 44px; text-align: right; }
+
+  .plan-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 20px; }
+  .plan-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; text-align: center; }
+  .plan-card .plan-name { font-size: 13px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+  .plan-card .plan-price { font-size: 42px; font-weight: 900; letter-spacing: -2px; line-height: 1; }
+  .plan-card .plan-price span { font-size: 18px; font-weight: 600; color: var(--text-dim); }
+  .plan-card .plan-customers { font-size: 14px; color: var(--text-dim); margin-top: 8px; }
+  .plan-card .plan-customers strong { color: var(--text); font-weight: 800; font-size: 22px; }
+  .plan-card .plan-mrr { margin-top: 12px; font-size: 20px; font-weight: 800; color: var(--green); }
+
+  @media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(2, 1fr); } .header h1 { font-size: 28px; } .kpi-card .kpi-value { font-size: 28px; } .dashboard { padding: 24px 16px 60px; } }
+  @media (max-width: 480px) { .kpi-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+
+  <div class="header">
+    <div class="logo">Cosine</div>
+    <h1>Team Dashboard</h1>
+    <div class="subtitle">Internal users excluded &middot; Apr 27, 2026</div>
+  </div>
+
+  <!-- Main navigation -->
+  <div class="main-nav">
+    <button class="main-nav-btn active" onclick="switchPage('webapp', this)">Web App</button>
+    <button class="main-nav-btn" onclick="switchPage('northstar', this)">North Star</button>
+    <button class="main-nav-btn" onclick="switchPage('signups', this)">New Sign Ups</button>
+    <button class="main-nav-btn" onclick="switchPage('inference', this)">Inference</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ WEB APP PAGE ═══════════════════════════════════════════ -->
+  <div id="page-webapp" class="page active">
+
+    <div class="section-title">Active Users — DAU / WAU / MAU</div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Daily Active Users</h3><div class="chart-sub">Last 30 days &middot; unique users who created or worked on a task</div><div class="chart-wrap"><canvas id="dauChart"></canvas></div></div>
+      <div class="chart-card"><h3>Weekly Active Users</h3><div class="chart-sub">Last 90 days &middot; unique users per week</div><div class="chart-wrap"><canvas id="wauChart"></canvas></div></div>
+    </div>
+    <div class="chart-row full">
+      <div class="chart-card"><h3>Monthly Active Users</h3><div class="chart-sub">Feb 2025 → Feb 2026 &middot; unique users per month</div><div class="chart-wrap"><canvas id="mauChart"></canvas></div></div>
+    </div>
+
+    <div class="section-title">Growth & Revenue</div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Monthly Activation Rate</h3><div class="chart-sub">% of signups who created at least one task</div><div class="chart-wrap"><canvas id="activationChart"></canvas></div></div>
+      <div class="chart-card"><h3>Monthly Revenue (Stripe)</h3><div class="chart-sub">Successful charges only &middot; from stripe.charge</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Paying Customers Over Time</h3><div class="chart-sub">Unique customers with a successful charge per month</div><div class="chart-wrap"><canvas id="payingCustomersChart"></canvas></div></div>
+      <div class="chart-card"><h3>MRR Over Time</h3><div class="chart-sub">Monthly recurring revenue from successful charges</div><div class="chart-wrap"><canvas id="mrrChart"></canvas></div></div>
+    </div>
+
+    <div class="section-title">Current Plans</div>
+    <div class="plan-cards">
+      <div class="plan-card" style="border-color: var(--green);"><div class="plan-name">Total MRR</div><div class="plan-price" style="color: var(--green);">$1,479<span>/mo</span></div><div class="plan-customers"><strong>44</strong> paying customers</div><div class="plan-mrr">682 sign-ups last 30d</div></div>
+      <div class="plan-card"><div class="plan-name">Hobby</div><div class="plan-price">$20<span>/mo</span></div><div class="plan-customers"><strong>32</strong> customers</div><div class="plan-mrr">$640/mo</div></div>
+      <div class="plan-card"><div class="plan-name">Professional</div><div class="plan-price">$99<span>/mo</span></div><div class="plan-customers"><strong>14</strong> customers</div><div class="plan-mrr">$1,386/mo</div></div>
+      <div class="plan-card"><div class="plan-name">Professional (Legacy)</div><div class="plan-price">$100<span>/mo</span></div><div class="plan-customers"><strong>3</strong> customers</div><div class="plan-mrr">$300/mo</div></div>
+    </div>
+
+    <div class="section-title">Top Users Leaderboard</div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showLeaderboard('30d', this)">Last 30 Days</button>
+      <button class="tab-btn" onclick="showLeaderboard('alltime', this)">All Time</button>
+    </div>
+    <div class="chart-card" style="padding: 0; overflow: hidden;"><table class="leaderboard" id="leaderboardTable"></table></div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════ COS BETA PAGE ═══════════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════════════ NORTH STAR PAGE ═══════════════════════════════════════════ -->
+  <div id="page-northstar" class="page">
+
+    <div class="section-title">North Star Metrics</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--green);"></div>
+        <div class="kpi-label">WAP</div>
+        <div class="kpi-value" style="color: var(--green);">38</div>
+        <div class="kpi-sub">week of Apr 20</div>
+        <div class="kpi-badge badge-green">Weekly Active Prompters</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--accent);"></div>
+        <div class="kpi-label">7-Day Activation</div>
+        <div class="kpi-value" style="color: var(--accent);">25.37%</div>
+        <div class="kpi-sub">Mar '26 cohort</div>
+        <div class="kpi-badge badge-accent">% of signups who ran a task within 7 days</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--blue);"></div>
+        <div class="kpi-label">NRR</div>
+        <div class="kpi-value" style="color: var(--blue);">51.6%</div>
+        <div class="kpi-sub">revenue retention Apr '26</div>
+        <div class="kpi-badge badge-blue">Net Revenue Retention (monthly)</div>
+      </div>
+    </div>
+
+    <div class="section-title">Weekly Active Prompters</div>
+    <div class="chart-row full">
+      <div class="chart-card">
+        <h3>Weekly Active Prompters (WAP)</h3>
+        <div class="chart-sub">Last 90 days &middot; unique users who submitted at least one task/prompt per week</div>
+        <div class="chart-wrap"><canvas id="wapChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-title">7-Day Activation Rate</div>
+    <div class="chart-row full">
+      <div class="chart-card">
+        <h3>7-Day Activation Rate by Signup Cohort</h3>
+        <div class="chart-sub">% of signups who ran their first task within 7 days of signing up</div>
+        <div class="chart-wrap"><canvas id="act7Chart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-title">Net Revenue Retention</div>
+    <div class="chart-row full">
+      <div class="chart-card">
+        <h3>Monthly NRR</h3>
+        <div class="chart-sub">Expansion minus contraction minus churn &middot; from Stripe charges</div>
+        <div class="chart-wrap"><canvas id="nrrChart"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════ NEW SIGN UPS PAGE ═══════════════════════════════════════════ -->
+  <div id="page-signups" class="page">
+
+    <div class="section-title">Sign-up Overview</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--green);"></div>
+        <div class="kpi-label">Sign-ups (30d)</div>
+        <div class="kpi-value" style="color: var(--green);">682</div>
+        <div class="kpi-sub">external sign-ups last 30 days</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--blue);"></div>
+        <div class="kpi-label">Sign-ups Today</div>
+        <div class="kpi-value" style="color: var(--blue);">4</div>
+        <div class="kpi-sub">new sign-ups today (UTC)</div>
+      </div>
+    </div>
+
+    <div class="section-title">Daily Sign-ups (Last 30 Days)</div>
+    <div class="chart-row full">
+      <div class="chart-card"><h3>New Sign-ups Per Day</h3><div class="chart-sub">External users only &middot; last 30 days</div><div class="chart-wrap"><canvas id="signupsChart"></canvas></div></div>
+    </div>
+
+    <div class="section-title">Recent Sign-ups</div>
+    <div class="chart-card" style="padding: 0; overflow: hidden;"><table class="leaderboard" id="signupsTable"></table></div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════ INFERENCE PAGE ═══════════════════════════════════════════ -->
+  <div id="page-inference" class="page">
+
+    <div class="section-title">Inference — Key Metrics (Last 30 Days)</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--pink);"></div>
+        <div class="kpi-label">Total Cost (30d)</div>
+        <div class="kpi-value" style="color: var(--pink);">$82,633</div>
+        <div class="kpi-sub">LLM inference spend last 30 days</div>
+        <div class="kpi-badge badge-pink">$120,434 all-time</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--amber);"></div>
+        <div class="kpi-label">API Calls (30d)</div>
+        <div class="kpi-value" style="color: var(--amber);">689K</div>
+        <div class="kpi-sub">inference requests last 30 days</div>
+        <div class="kpi-badge badge-amber">1.3M all-time</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--blue);"></div>
+        <div class="kpi-label">Avg Cost / Call</div>
+        <div class="kpi-value" style="color: var(--blue);">$0.12</div>
+        <div class="kpi-sub">average per inference call</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--green);"></div>
+        <div class="kpi-label">Input Tokens (30d)</div>
+        <div class="kpi-value" style="color: var(--green);">51.3B</div>
+        <div class="kpi-sub">total input tokens processed</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--accent);"></div>
+        <div class="kpi-label">Output Tokens (30d)</div>
+        <div class="kpi-value" style="color: var(--accent);">262M</div>
+        <div class="kpi-sub">total output tokens generated</div>
+      </div>
+      <div class="kpi-card">
+        <div class="glow" style="background: var(--amber);"></div>
+        <div class="kpi-label">Top Model</div>
+        <div class="kpi-value" style="color: var(--amber); font-size: 20px;">Sonnet 4.6</div>
+        <div class="kpi-sub">$44,065 &middot; 53% of total spend</div>
+        <div class="kpi-badge badge-amber">172K calls</div>
+      </div>
+    </div>
+
+    <div class="section-title">Daily Inference Cost</div>
+    <div class="chart-row full">
+      <div class="chart-card"><h3>Daily Cost (USD)</h3><div class="chart-sub">Last 30 days &middot; all models &middot; from $ai_generation events</div><div class="chart-wrap"><canvas id="inferenceCostChart"></canvas></div></div>
+    </div>
+
+    <div class="section-title">Cost by Model</div>
+    <div class="chart-row">
+      <div class="chart-card"><h3>Model Cost Breakdown</h3><div class="chart-sub">Last 30 days &middot; top models by spend</div><div class="chart-wrap"><canvas id="inferenceModelChart"></canvas></div></div>
+      <div class="chart-card"><h3>Calls by Model</h3><div class="chart-sub">Last 30 days &middot; top models by call volume</div><div class="chart-wrap"><canvas id="inferenceCallsChart"></canvas></div></div>
+    </div>
+
+    <div class="section-title">Top Spenders (External Users)</div>
+    <div class="chart-card" style="padding: 0; overflow: hidden;"><table class="leaderboard" id="inferenceSpendersTable"></table></div>
+
+  </div>
+
+</div>
+
+<script>
+Chart.defaults.color = '#8888a0';
+Chart.defaults.borderColor = '#2a2a3a';
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.font.weight = 500;
+
+const gridOpts = { color: 'rgba(42,42,58,0.6)', drawBorder: false };
+const tooltipOpts = { backgroundColor: '#1a1a26', titleColor: '#e4e4ef', bodyColor: '#e4e4ef', borderColor: '#2a2a3a', borderWidth: 1, cornerRadius: 10, padding: 12, titleFont: { weight: 700 }, bodyFont: { weight: 500 } };
+
+// ═══ Page switching ═══
+let chartsInitialized = { webapp: false, northstar: false, signups: false, inference: false };
+
+function switchPage(page, btn) {
+  document.querySelectorAll('.main-nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (!chartsInitialized[page]) {
+    if (page === 'webapp') initWebApp();
+    else if (page === 'northstar') initNorthStar();
+    else if (page === 'signups') initSignups();
+    else if (page === 'inference') initInference();
+    chartsInitialized[page] = true;
+  }
+}
+
+// ═══ WEB APP CHARTS ═══
+function initWebApp() {
+  // DAU
+  const dauLabels = ["Mar 28","Mar 29","Mar 30","Mar 31","Apr 1","Apr 2","Apr 3","Apr 4","Apr 5","Apr 6","Apr 7","Apr 8","Apr 9","Apr 10","Apr 11","Apr 12","Apr 13","Apr 14","Apr 15","Apr 16","Apr 17","Apr 18","Apr 19","Apr 20","Apr 21","Apr 22","Apr 23","Apr 24","Apr 25","Apr 26","Apr 27"];
+  const dauData = [28,43,62,50,69,42,22,19,16,21,36,31,28,21,11,14,25,25,29,26,28,16,13,28,27,28,28,28,12,12,23];
+  new Chart(document.getElementById('dauChart'), { type:'bar', data:{ labels:dauLabels, datasets:[{ data:dauData, backgroundColor:dauData.map((v,i) => i===dauLabels.length-1 ? 'rgba(108,92,231,0.9)' : 'rgba(108,92,231,0.35)'), borderRadius:4, borderSkipped:false, barPercentage:0.7 }] }, options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{legend:{display:false},tooltip:tooltipOpts}, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:8}}, y:{grid:gridOpts,beginAtZero:true} } } });
+
+  // WAU
+  const wauLabels = ["Jan 26","Feb 02","Feb 09","Feb 16","Feb 23","Mar 02","Mar 09","Mar 16","Mar 23","Mar 30","Apr 06","Apr 13","Apr 20","Apr 27"];
+  const wauData = [136,142,138,166,165,160,165,171,163,130,67,60,63,23];
+  new Chart(document.getElementById('wauChart'), { type:'line', data:{ labels:wauLabels, datasets:[{ data:wauData, borderColor:'#339af0', backgroundColor:'rgba(51,154,240,0.08)', borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#339af0', pointBorderColor:'#12121a', pointBorderWidth:2, pointHoverRadius:7 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:tooltipOpts}, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:7}}, y:{grid:gridOpts,beginAtZero:true} } } });
+
+  // MAU
+  const mauLabels = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const mauData = [31,222,180,154,754,1514,1736,2647,2020,724,413,430,183];
+  new Chart(document.getElementById('mauChart'), { type:'bar', data:{ labels:mauLabels, datasets:[{ data:mauData, backgroundColor:mauData.map(v => v>=1000?'rgba(0,214,143,0.7)':v>=500?'rgba(0,214,143,0.45)':'rgba(108,92,231,0.4)'), borderRadius:6, borderSkipped:false, barPercentage:0.65 }] }, options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{legend:{display:false},tooltip:tooltipOpts}, scales:{ x:{grid:{display:false}}, y:{grid:gridOpts,beginAtZero:true} } } });
+
+  // Activation
+  const actLabels = ["May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const actRates = [14.84,10.49,12.09,8.48,12.17,28.79,31.62,28.41,27.2,32.01,26.87,9.37];
+  const actNew = [1132,1201,678,3160,6352,2973,2691,1989,592,328,335,651];
+  const actActivated = [168,126,82,268,773,856,851,565,161,105,90,61];
+  new Chart(document.getElementById('activationChart'), { type:'bar', data:{ labels:actLabels, datasets:[ { label:'Activation Rate', data:actRates, type:'line', borderColor:'#f0a500', borderWidth:2.5, fill:false, tension:0.3, pointRadius:5, pointBackgroundColor:'#f0a500', pointBorderColor:'#12121a', pointBorderWidth:2, yAxisID:'y1', order:0 }, { label:'New Users', data:actNew, backgroundColor:'rgba(108,92,231,0.3)', borderRadius:4, borderSkipped:false, barPercentage:0.55, yAxisID:'y', order:1 }, { label:'Activated', data:actActivated, backgroundColor:'rgba(0,214,143,0.5)', borderRadius:4, borderSkipped:false, barPercentage:0.55, yAxisID:'y', order:1 } ] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{boxWidth:12,padding:16}}, tooltip:{...tooltipOpts, callbacks:{label:ctx=>ctx.dataset.yAxisID==='y1'?ctx.dataset.label+': '+ctx.parsed.y.toFixed(1)+'%':ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()}} }, scales:{ x:{grid:{display:false},ticks:{maxRotation:0}}, y:{grid:gridOpts,beginAtZero:true,position:'left'}, y1:{grid:{display:false},position:'right',beginAtZero:true,max:40,ticks:{callback:v=>v+'%'}} } } });
+
+  // Revenue (from Stripe data)
+  const revLabels = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const revData = [1980,3840,4780,4140,2460,2000,1399,1439,2111,1515,1318,1317,1479];
+  new Chart(document.getElementById('revenueChart'), { type:'bar', data:{ labels:revLabels, datasets:[{ data:revData, backgroundColor:revData.map(v => v>=4000?'rgba(0,214,143,0.7)':v>=2000?'rgba(0,214,143,0.4)':'rgba(240,165,0,0.4)'), borderRadius:6, borderSkipped:false, barPercentage:0.6 }] }, options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>'$'+ctx.parsed.y.toLocaleString()}} }, scales:{ x:{grid:{display:false}}, y:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>'$'+(v/1000).toFixed(1)+'k'}} } } });
+
+  // Paying Customers Over Time
+  const pcLabels = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const pcData = [64,96,93,87,68,61,47,46,45,36,34,29,44];
+  new Chart(document.getElementById('payingCustomersChart'), { type:'line', data:{ labels:pcLabels, datasets:[{ data:pcData, borderColor:'#6c5ce7', backgroundColor:'rgba(108,92,231,0.1)', borderWidth:2.5, fill:true, tension:0.3, pointRadius:5, pointBackgroundColor:'#6c5ce7', pointBorderColor:'#12121a', pointBorderWidth:2, pointHoverRadius:7 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>ctx.parsed.y+' customers'}} }, scales:{ x:{grid:{display:false}}, y:{grid:gridOpts,beginAtZero:true} } } });
+
+  // MRR Over Time
+  const mrrLabels = ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const mrrData = [1980,3840,4780,4140,2460,2000,1399,1439,2111,1515,1318,1317,1479];
+  new Chart(document.getElementById('mrrChart'), { type:'line', data:{ labels:mrrLabels, datasets:[{ data:mrrData, borderColor:'#00d68f', backgroundColor:'rgba(0,214,143,0.1)', borderWidth:2.5, fill:true, tension:0.3, pointRadius:5, pointBackgroundColor:'#00d68f', pointBorderColor:'#12121a', pointBorderWidth:2, pointHoverRadius:7 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>'$'+ctx.parsed.y.toLocaleString()}} }, scales:{ x:{grid:{display:false}}, y:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>'$'+(v/1000).toFixed(1)+'k'}} } } });
+}
+
+// ═══ NORTH STAR CHARTS ═══
+function initNorthStar() {
+  // WAP chart
+  const wapLabels = ["Jan 26","Feb 02","Feb 09","Feb 16","Feb 23","Mar 02","Mar 09","Mar 16","Mar 23","Mar 30","Apr 06","Apr 13","Apr 20","Apr 27"];
+  const wapData = [68,73,57,82,87,90,76,90,79,65,34,32,38,8];
+  new Chart(document.getElementById('wapChart'), { type:'line', data:{ labels:wapLabels, datasets:[{ data:wapData, borderColor:'#00d68f', backgroundColor:'rgba(0,214,143,0.1)', borderWidth:2.5, fill:true, tension:0.35, pointRadius:4, pointBackgroundColor:'#00d68f', pointBorderColor:'#12121a', pointBorderWidth:2, pointHoverRadius:7 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:tooltipOpts}, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:7}}, y:{grid:gridOpts,beginAtZero:true} } } });
+
+  // 7-day activation chart
+  const act7Labels = ["May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const act7Rates = [11.66,8.41,9.29,8.07,11.1,27.04,29.73,26.75,25.51,29.57,25.37,9.06];
+  const act7New = [1132,1201,678,3160,6352,2973,2691,1989,592,328,335,651];
+  const act7Activated = [132,101,63,255,705,804,800,532,151,97,85,59];
+  new Chart(document.getElementById('act7Chart'), { type:'bar', data:{ labels:act7Labels, datasets:[ { label:'7-Day Activation Rate', data:act7Rates, type:'line', borderColor:'#6c5ce7', borderWidth:2.5, fill:false, tension:0.3, pointRadius:5, pointBackgroundColor:'#6c5ce7', pointBorderColor:'#12121a', pointBorderWidth:2, yAxisID:'y1', order:0 }, { label:'New Signups', data:act7New, backgroundColor:'rgba(108,92,231,0.3)', borderRadius:4, borderSkipped:false, barPercentage:0.55, yAxisID:'y', order:1 }, { label:'Activated (7d)', data:act7Activated, backgroundColor:'rgba(0,214,143,0.5)', borderRadius:4, borderSkipped:false, barPercentage:0.55, yAxisID:'y', order:1 } ] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{boxWidth:12,padding:16}}, tooltip:{...tooltipOpts, callbacks:{label:ctx=>ctx.dataset.yAxisID==='y1'?ctx.dataset.label+': '+ctx.parsed.y.toFixed(1)+'%':ctx.dataset.label+': '+ctx.parsed.y.toLocaleString()}} }, scales:{ x:{grid:{display:false},ticks:{maxRotation:0}}, y:{grid:gridOpts,beginAtZero:true,position:'left'}, y1:{grid:{display:false},position:'right',beginAtZero:true,max:60,ticks:{callback:v=>v+'%'}} } } });
+
+  // NRR chart
+  const nrrLabels = ["May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan '26","Feb '26","Mar '26","Apr '26"];
+  const nrrData = [82.8,74.0,61.5,46.9,76.4,60.0,88.6,83.4,48.3,73.8,84.9,51.6];
+  new Chart(document.getElementById('nrrChart'), { type:'bar', data:{ labels:nrrLabels, datasets:[{ data:nrrData, backgroundColor:nrrData.map(v=>v>=100?'rgba(0,214,143,0.7)':v>=80?'rgba(0,214,143,0.45)':v>=60?'rgba(240,165,0,0.45)':'rgba(255,107,107,0.5)'), borderRadius:6, borderSkipped:false, barPercentage:0.6 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>ctx.parsed.y.toFixed(1)+'%'}} }, scales:{ x:{grid:{display:false}}, y:{grid:gridOpts,beginAtZero:false,min:0,max:120,ticks:{callback:v=>v+'%'}} } } });
+}
+
+// ═══ Sign-ups ═══
+const signupsLabels = ["Mar 29","Mar 30","Mar 31","Apr 1","Apr 2","Apr 3","Apr 4","Apr 5","Apr 6","Apr 7","Apr 8","Apr 9","Apr 10","Apr 11","Apr 12","Apr 13","Apr 14","Apr 15","Apr 16","Apr 17","Apr 18","Apr 19","Apr 20","Apr 21","Apr 22","Apr 23","Apr 24","Apr 25","Apr 26","Apr 27"];
+const signupsData = [16,5,10,26,7,12,14,10,9,14,18,19,17,9,6,12,6,8,73,100,62,31,30,37,28,38,25,21,15,4];
+const signupsList = [
+  {name:"Samuel Teitelbaum",email:"sam@neuroloom.io",date:"2026-04-27",activated:false},
+  {name:"Shaolong Wang",email:"mr.slongw@gmail.com",date:"2026-04-27",activated:false},
+  {name:"Imesha Malkanthi",email:"sadunsameer883@gmail.com",date:"2026-04-27",activated:false},
+  {name:"Mohammed Ali",email:"mahamadila812@gmail.com",date:"2026-04-27",activated:false},
+  {name:"Mishari Alnasrallah",email:"misharialnasrallah@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Nicolas Marchesseau",email:"nmarchesseau@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Sujal Shah",email:"sujalshahtools@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Veerbhadrasinh Jadeja",email:"jadejaveer528@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Z CHAPPAL",email:"zforchappal@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Mokeddem Roumaissa",email:"mokeddemroumaissa@gmail.com",date:"2026-04-26",activated:false},
+  {name:"iron mawa",email:"ironmawa@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Amami Abdessalam",email:"pitchu213@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Яна Бобнева",email:"bobneva.yana@gmail.com",date:"2026-04-26",activated:false},
+  {name:"David Sureshwar",email:"davidsureshwar33@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Youssef ben hassine",email:"benhassineyoussef9@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Sohail Iqbal",email:"sohailiqbal520362@gmail.com",date:"2026-04-26",activated:false},
+  {name:"cmdkolab",email:"websiteroot@icloud.com",date:"2026-04-26",activated:false},
+  {name:"MagisPH",email:"phdtemiranda@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Eunice Ahashie",email:"eedahashie@gmail.com",date:"2026-04-26",activated:false},
+  {name:"Devon Barrett",email:"devon.barrett.uk@gmail.com",date:"2026-04-25",activated:false},
+  {name:"DEBATOSH SAHOO",email:"debatoshsahoo3112@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Joshua colletta",email:"joshuacolletta.work@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Saoudi Ahmed Djihad -A7-",email:"ismoqoiq@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Ravi Teja",email:"ravitejabolla756@gmail.com",date:"2026-04-25",activated:false},
+  {name:"zi cul",email:"culz45713@gmail.com",date:"2026-04-25",activated:false},
+  {name:"john smitth",email:"smitth529@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Gege Gaming",email:"gaminggege052@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Hamid Shahzad",email:"prince23vegeta@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Neel Dembla",email:"neel.dembla.3010@gmail.com",date:"2026-04-25",activated:false},
+  {name:"sukanta bhattacharjee",email:"sukantabhattacharjee853@gmail.com",date:"2026-04-25",activated:false},
+  {name:"tiger noir",email:"buboromeo@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Manoj Pagadala",email:"manojpagadala165@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Hmayer walid",email:"hmayer.walid@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Pakija mulla",email:"mullapakija113@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Muhammad Haseeb",email:"i232578@isb.nu.edu.pk",date:"2026-04-25",activated:false},
+  {name:"Saurabh Hardel",email:"saurabhhardel5286@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Владислав Левченко",email:"larisakononenko445@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Mark Gingras",email:"m4rkg330@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Dejan Kovačević",email:"deosijek@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Rick Kats",email:"rick.kats@gmail.com",date:"2026-04-25",activated:false},
+  {name:"Asif Khan",email:"asifsakhani97@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Gabriele Silini",email:"gabrielesilini4@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Shorya kaushik",email:"shoryak97@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Caetano José",email:"caetanocj275@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Bryce Cannon",email:"bryce.cannon.07@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Gu Box",email:"bugiboxx@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Matthew Giam",email:"mattgzhin@gmail.com",date:"2026-04-24",activated:false},
+  {name:"kolajora",email:"hackerjora@gmail.com",date:"2026-04-24",activated:false},
+  {name:"",email:"andrzej.m.michalowski@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Aurélien Viou",email:"aurelienvioudesign@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Rudraksh Paliwal",email:"edith22krudraksh@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Zone3 dscc",email:"zone03dscc@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Niranjan Kumar",email:"hey.niranjankumar@gmail.com",date:"2026-04-24",activated:false},
+  {name:"P-biofertilizer",email:"pbiofertilizer@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Hemanth TM",email:"imptmhemanth0@gmail.com",date:"2026-04-24",activated:false},
+  {name:"karim derbel",email:"derbel.karim98@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Obey Gaint",email:"alwaysobeygaint@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Enrique",email:"enrique.geldenhuys@entelect.co.za",date:"2026-04-24",activated:true},
+  {name:"Kenneth Cubian",email:"cubian.kenneth.4@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Enrique Geldenhuys",email:"github.eegee@0wnd.org",date:"2026-04-24",activated:false},
+  {name:"QUANG HONG",email:"sanonihongo@gmail.com",date:"2026-04-24",activated:true},
+  {name:"",email:"j240924d@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Tulabandulla Revanth",email:"tulabandullarevanth@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Devansh Sharma",email:"devansh80541@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Fraser Griffiths",email:"hi.lydon@gmail.com",date:"2026-04-24",activated:false},
+  {name:"Shaahid Mukadam",email:"shaahid@orvantaopencollege.co.uk",date:"2026-04-23",activated:false},
+  {name:"Steve Milton",email:"milton.steve@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Nikitha Patil",email:"yellowsun2403@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Alex Hales",email:"alexhales1825@gmail.com",date:"2026-04-23",activated:false},
+  {name:"23ece1011_ Geetanjali",email:"23ece1011@nitgoa.ac.in",date:"2026-04-23",activated:false},
+  {name:"raavi kumar",email:"raavikumar311@gmail.com",date:"2026-04-23",activated:false},
+  {name:"User Aga",email:"useraga00@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Mohit Hadap",email:"mohit.hadap@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Amal Raj",email:"amal@diversio.com",date:"2026-04-23",activated:false},
+  {name:"Umanga Bhattarai",email:"umanga@diversio.com",date:"2026-04-23",activated:true},
+  {name:"Muhammad Abdul",email:"muhammad@diversio.com",date:"2026-04-23",activated:false},
+  {name:"Ashish Siwal",email:"ashish@diversio.com",date:"2026-04-23",activated:true},
+  {name:"Admin Diversio",email:"admin@diversio.com",date:"2026-04-23",activated:true},
+  {name:"aarnav singh",email:"aarnavujji@gmail.com",date:"2026-04-23",activated:false},
+  {name:"md shameel",email:"mdshameel740@gmail.com",date:"2026-04-23",activated:false},
+  {name:"",email:"jason.viviers@entelect.co.za",date:"2026-04-23",activated:false},
+  {name:"JJ Badenhorst",email:"jj.badenhorst@entelect.co.za",date:"2026-04-23",activated:false},
+  {name:"",email:"sahil.naran@entelect.co.uk",date:"2026-04-23",activated:false},
+  {name:"Gideon Botha",email:"gidbot@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Greg Schroder",email:"gregory@entelect.co.za",date:"2026-04-23",activated:false},
+  {name:"Chris Dunne",email:"contact@chrisdunne.net",date:"2026-04-23",activated:true},
+  {name:"Gnandi Bilanté",email:"bilantegnandi27@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Ali A.",email:"ali@robomart.ai",date:"2026-04-23",activated:false},
+  {name:"vikramjeet singh",email:"vikramjeet.-3@mail.bcu.ac.uk",date:"2026-04-23",activated:false},
+  {name:"You Gooo",email:"yougooo429@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Siddhartha",email:"pib.siddhartha@gmail.com",date:"2026-04-23",activated:false},
+  {name:"SUKO KUO",email:"garykuuo@gmail.com",date:"2026-04-23",activated:false},
+  {name:"TRUST CORPORATION",email:"trustcorporation87@gmail.com",date:"2026-04-23",activated:false},
+  {name:"MITHUN KAILASH R S IT-2021",email:"2115010@nec.edu.in",date:"2026-04-23",activated:false},
+  {name:"Mithun Mithun",email:"r.s.mithunkailash@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Lucia Popa",email:"lucia@emotii.ai",date:"2026-04-23",activated:false},
+  {name:"Abdul Basit Mujeeb",email:"abasit@aup.edu.pk",date:"2026-04-23",activated:false},
+  {name:"sidduuu",email:"siddiqmd751@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Abuzar Ali",email:"abuzarjawwad7@gmail.com",date:"2026-04-23",activated:false},
+  {name:"gulshair Khaqan",email:"gulshairkhaqan@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Ashley Immanuel",email:"immanuelashley77@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Nabin Thapa",email:"nabeen2058@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Kfkfnf Fnnxxnmx",email:"itransitionx@gmail.com",date:"2026-04-23",activated:false},
+  {name:"Quabbapus",email:"sjas@einhorn.co",date:"2026-04-22",activated:false},
+  {name:"Kishore S",email:"kishore02005ooo@gmail.com",date:"2026-04-22",activated:false},
+  {name:"viktor goodbridge",email:"viktorgoodbridge@gmail.com",date:"2026-04-22",activated:true},
+  {name:"Shashish Soni",email:"shshshsoni2003@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Mahita",email:"mahitasimha24@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Chris Aufenanger | Declarium",email:"ca@declarium.de",date:"2026-04-22",activated:false},
+  {name:"Jayakrishna sai Koppoli",email:"koppolijayakrishnasai@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Kevin Segal",email:"kevinmsegal@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Gitti Ekchan",email:"gittitat@mohara.co",date:"2026-04-22",activated:false},
+  {name:"Muhammad Tayyab",email:"mtayyab9667@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Andrea Pepe",email:"andrea.pepe@itconsultingsrl.it",date:"2026-04-22",activated:false},
+  {name:"Cyril Maurice",email:"crl.cyril.cyryl@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Nick Solly",email:"nick@mohara.co",date:"2026-04-22",activated:false},
+  {name:"Timmy",email:"timothy.thomas2011@hotmail.com",date:"2026-04-22",activated:false},
+  {name:"Curtastrophe",email:"chow.curtis@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Saket Kattuboina",email:"saket.kattuboina@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Desi Gamer",email:"dadigitalpremium@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Mohammed Ibrahim",email:"mi5062254@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Aravind A",email:"samalaaravind02@gmail.com",date:"2026-04-22",activated:true},
+  {name:"Nikolay Kolev",email:"nikolaynkolev@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Rutchanon",email:"therw0001@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Sachin Potter",email:"hnpotter32@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Joe Seifi",email:"joemseifi@icloud.com",date:"2026-04-22",activated:false},
+  {name:"Felipe Silva",email:"fxlipezk@gmail.com",date:"2026-04-22",activated:false},
+  {name:"elena mylona",email:"elenamylonaai@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Elena",email:"elenamylocuda@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Sooraj Chhabria",email:"soorajchhabria16@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Marwa Mnari",email:"mnarimarwa.hm@gmail.com",date:"2026-04-22",activated:false},
+  {name:"Toby Allen",email:"toby@tacon.me",date:"2026-04-21",activated:false},
+  {name:"ARamiro Gonsalez",email:"grosomagroso@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Renan Umpierre",email:"renanlopesumpierre@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Faraz Khan",email:"faraz.afzal2003@gmail.com",date:"2026-04-21",activated:false},
+  {name:"MAIN AGENT",email:"mattbemail1966@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Lush Cuts",email:"lushcuts4@gmail.com",date:"2026-04-21",activated:false},
+  {name:"nikoju srama",email:"dontaskmyname999@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Madura Vada",email:"maduravada@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Juan Diego Arregui Acosta",email:"j.arregui@calderonlawfirm.com",date:"2026-04-21",activated:false},
+  {name:"Fahim Abrar",email:"fahiemabrar07@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Gnaneandra Reddy",email:"gnaneandra9959@gmail.com",date:"2026-04-21",activated:false},
+  {name:"悟五条",email:"ebenezermorgantrn953@gmail.com",date:"2026-04-21",activated:false},
+  {name:"",email:"tomasz.gaming09@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Mihai Zaharia",email:"mihaizaharia@mzphotography.ro",date:"2026-04-21",activated:false},
+  {name:"Dominik Keller",email:"mail@dominikkeller.com",date:"2026-04-21",activated:false},
+  {name:"chao zhong",email:"zhongchao07280215@gmail.com",date:"2026-04-21",activated:false},
+  {name:"stan Mano",email:"manostan32@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Daksh Jain",email:"jain.daksh95@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Kitty Dapp",email:"kittydapps@gmail.com",date:"2026-04-21",activated:true},
+  {name:"Illia Kroshka ",email:"kroshka.illya@lll.kpi.ua",date:"2026-04-21",activated:false},
+  {name:"Akash R",email:"rangasmyakash@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Advaith Vaithianathan",email:"advaithv.av7@gmail.com",date:"2026-04-21",activated:false},
+  {name:"T T",email:"suvurr@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Nerova",email:"nexovaos@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Davi Sousa",email:"davi2005.xyz@gmail.com",date:"2026-04-21",activated:false},
+  {name:"",email:"github@arreteq.com",date:"2026-04-21",activated:false},
+  {name:"Dylan Young",email:"dylan.young@mohara.co",date:"2026-04-21",activated:false},
+  {name:"Bikeflip",email:"nikolai@bikeflip.com",date:"2026-04-21",activated:false},
+  {name:"Daniel Pohl",email:"homesickness@ag-thrust.cloud",date:"2026-04-21",activated:false},
+  {name:"k Lexus",email:"klexus326@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Asdera",email:"asderacodigo@gmail.com",date:"2026-04-21",activated:true},
+  {name:"Raj Aa",email:"teamreelsbazaar@gmail.com",date:"2026-04-21",activated:false},
+  {name:"",email:"mrjkilcoyne@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Swarup D",email:"iamswarupd42006@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Anonymous",email:"princemaurya2557@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Harshil Brahmani",email:"harshilbrahmani48@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Udit Shah",email:"itsmeuditshah@gmail.com",date:"2026-04-21",activated:false},
+  {name:"Jesse Bernstein",email:"jtradin@mobycode.net",date:"2026-04-20",activated:false},
+  {name:"Lion",email:"32omar03@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Genshin Impact",email:"genshinimapct123@gmail.com",date:"2026-04-20",activated:false},
+  {name:"",email:"echapman684@decornido.com",date:"2026-04-20",activated:false},
+  {name:"Burt Reynolds",email:"drapery.juice.0i@icloud.com",date:"2026-04-20",activated:false},
+  {name:"Sedrique Xavier Messina",email:"messsed@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Ankur Sinha",email:"ankursinha@fedoraproject.org",date:"2026-04-20",activated:false},
+  {name:"Mehta Darshil",email:"mehtadarshil98@gmail.com",date:"2026-04-20",activated:false},
+  {name:"KR",email:"kashifrana998@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Ashwin Nethan",email:"ashwinnethan07@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Saba",email:"s49959397@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Philipp Buschhaus",email:"philipp@autonomousminds.ai",date:"2026-04-20",activated:true},
+  {name:"talyas collins",email:"saynax1999@gmail.com",date:"2026-04-20",activated:false},
+  {name:"rthertz tree",email:"wetweg@byom.de",date:"2026-04-20",activated:false},
+  {name:"Craig Bloodworth",email:"craig.bloodworth@theinformationlab.co.uk",date:"2026-04-20",activated:true},
+  {name:"Yassir Ahmad Nugroho",email:"yassirnugroho48@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Arthur Vivian",email:"arthurvivian@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Frederik Hvilshøj",email:"fh@sumary.com",date:"2026-04-20",activated:false},
+  {name:"Taha Berk Oğurlu",email:"ogurlutaha6640@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Eyad",email:"e.ahmed56504@student.aast.edu",date:"2026-04-20",activated:false},
+  {name:"Ganesh Nikam",email:"ganesh.nikam2727@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Sofiane Bebert",email:"sofiane.bebert@faculty.ai",date:"2026-04-20",activated:false},
+  {name:"Pham Tuan",email:"tuan.jjj87@gmail.com",date:"2026-04-20",activated:false},
+  {name:"vrishab sharma",email:"vrishabsharma61@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Jade Fontes",email:"jadefontesy8x3n@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Lucas",email:"yaukzzz@gmail.com",date:"2026-04-20",activated:false},
+  {name:"feroz feroz",email:"feroz1423gj@gmail.com",date:"2026-04-20",activated:false},
+  {name:"кто кирюха",email:"ukirilluvenskij@gmail.com",date:"2026-04-20",activated:false},
+  {name:"",email:"meerk8@gmail.com",date:"2026-04-20",activated:false},
+  {name:"João Filipe Silva",email:"joaofilipesilvawty@gmail.com",date:"2026-04-20",activated:false},
+  {name:"Rovshan Gurbanov",email:"grm.ashgabad@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Ecommerce Slide",email:"ecommerceslide@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Kevin Kirana Pulungan",email:"sepogonangabang@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Hilliam Tung",email:"hilliamtung@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Flash",email:"flash1fast151@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Petr Gola",email:"petr.gola@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Sanantheshwaran E",email:"sana0630c@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Gourav Das",email:"gouravx112@gmail.com",date:"2026-04-19",activated:false},
+  {name:"ahmed tadja",email:"tadjamohamed1@gmail.com",date:"2026-04-19",activated:false},
+  {name:"shuai li",email:"creakeast@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Andy Ingold",email:"andy@agentcafe.ai",date:"2026-04-19",activated:false},
+  {name:"[ Azzam ] Ahmad Azzam Maulana",email:"sh1mytbagus@gmail.com",date:"2026-04-19",activated:false},
+  {name:"",email:"7singh.simarpreet7@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Renata Stoqueiro",email:"re.stoqueiro@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Laurin Ehrensperger",email:"laurinehrensperger11@icloud.com",date:"2026-04-19",activated:false},
+  {name:"Denis Me",email:"medenis157@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Ph T",email:"tph262545@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Momin Aldahdouh",email:"momin.aldahdooh@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Pranay Manocha",email:"pranman@gmail.com",date:"2026-04-19",activated:false},
+  {name:"tha vannchha",email:"thavannchha@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Jyothi Ampally",email:"jyothiampally@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Andreas Asprou",email:"andyasprou@gmail.com",date:"2026-04-19",activated:true},
+  {name:"Lionx",email:"lionxrusky@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Nandan Naik",email:"naiknandan397@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Duncan Gillingwater",email:"duncanapm@gmail.com",date:"2026-04-19",activated:true},
+  {name:"Vaja Akshat",email:"vajaakshu1303@gmail.com",date:"2026-04-19",activated:false},
+  {name:"unknown 3882",email:"chintopuneeth@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Nope",email:"nopessh@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Brahmarishendra.K",email:"brahmarishi868@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Jack Reilly",email:"jackpbreilly@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Sergey Mezhidov",email:"sergey.mezhidov@gmail.com",date:"2026-04-19",activated:false},
+  {name:"Chrys Zampas",email:"zampas@gmail.com",date:"2026-04-18",activated:true},
+  {name:"Harel Gabai",email:"gabaiharel1994@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Азиз Манонов",email:"azizmanonov303@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Steven Gerner",email:"sgerner@gmail.com",date:"2026-04-18",activated:false},
+  {name:"",email:"jay.eames@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Abed Hassan",email:"alihassanee.12@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Erick Aparecido",email:"erickapbrites@gmail.com",date:"2026-04-18",activated:false},
+  {name:"kachi Luiz",email:"kachiluiz@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Sophie Kimber",email:"danimalstcgyt@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Yiğithan Kaya",email:"yigithankaya92@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Samuel Owolabi",email:"owolabisamuel15@gmail.com",date:"2026-04-18",activated:false},
+  {name:"q1nce_",email:"vortexgames574@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Redmi12",email:"redmi125g2050@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Shankar Swag",email:"shankarswag73@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Lars Lagauw",email:"lars.lagauw@gmail.com",date:"2026-04-18",activated:false},
+  {name:"enzo",email:"dhanush4edu@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Matt Voska",email:"matt@voska.org",date:"2026-04-18",activated:true},
+  {name:"VASALA DEVI PRADEEP",email:"vdpradeep11@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Sayan Kumar Roy",email:"sayankumarr02@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Sairaj Surlikar",email:"sairajsurlikar41@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Oluwatobi Fatumo",email:"tobyfatumo@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Max Eland",email:"max.eland03@gmail.com",date:"2026-04-18",activated:false},
+  {name:"sulav magar",email:"sulavmgr456@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Devon Barrett",email:"devon@podaris.com",date:"2026-04-18",activated:false},
+  {name:"Souparna Roy",email:"souparnaroy070899@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Souparna Roy",email:"souparnaroy85@gmail.com",date:"2026-04-18",activated:false},
+  {name:"aary Rai",email:"aaryrai54@gmail.com",date:"2026-04-18",activated:false},
+  {name:"BROKEN GAMER",email:"brokenheart2186@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Nitanshu Limbachiya",email:"nitanshu15@gmail.com",date:"2026-04-18",activated:false},
+  {name:"AI Rhythm Ripple",email:"airipplerhythm@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Sourabh Sharma",email:"sour4bh@pm.me",date:"2026-04-18",activated:false},
+  {name:"homie clip",email:"cliphomie@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Cederik",email:"cederik@cederik.com",date:"2026-04-18",activated:false},
+  {name:"OM PRAKASH",email:"os4558966@gmail.com",date:"2026-04-18",activated:false},
+  {name:"",email:"khatikrehanbhai@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Paddy Keane",email:"keanepaddy@gmail.com",date:"2026-04-18",activated:false},
+  {name:"",email:"jiazheng104@gmail.com",date:"2026-04-18",activated:false},
+  {name:"basim hussain",email:"basimkodhan07@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Rubahan 26",email:"rubahan26@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Aryan suthar",email:"aryansuthar194@gmail.com",date:"2026-04-18",activated:false},
+  {name:"SOLALU AJI",email:"solaluaji@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Erhan Yavuz",email:"erhan338yavuz@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Moazzam Nauman",email:"moazzam.nauman04@gmail.com",date:"2026-04-18",activated:false},
+  {name:"",email:"drikkelig.baobabs2j@icloud.com",date:"2026-04-18",activated:false},
+  {name:"Chris Burke",email:"deizel@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Akhit Rai",email:"akhitrai18@gmail.com",date:"2026-04-18",activated:false},
+  {name:"jaat kundu",email:"jaatkundu90346@gmail.com",date:"2026-04-18",activated:false},
+  {name:"TUFANI Gamer OP",email:"legends939sahil@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Wan Zulasyraf",email:"wzulasyraf01@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Hi h",email:"hih6303832@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Chintan Kukadiya",email:"kukadiyachintan026@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Satish Shah7447",email:"satishshah7447@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Meet Shingala",email:"meetshingala200@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Damilola Ige (idmcalculus)",email:"idm.calculus@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Bellana Jagadeesh",email:"jagadheshbellane@gmail.com",date:"2026-04-18",activated:false},
+  {name:"emeka mamah",email:"mamahemeka84@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Sree Varshan",email:"sreevarshan1511@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Matthew Ofomi",email:"ofomimatthew7@gmail.com",date:"2026-04-18",activated:false},
+  {name:"David Iyodo (iyodofig)",email:"davidoiyodo@gmail.com",date:"2026-04-18",activated:false},
+  {name:"Velan g Velan g",email:"velangvelang57@gmail.com",date:"2026-04-18",activated:false},
+  {name:"EDGD Media",email:"edgdmedia@gmail.com",date:"2026-04-18",activated:false},
+  {name:"chris",email:"chris@naitive.cloud",date:"2026-04-18",activated:true},
+  {name:"Mohamd Kayn",email:"mohamdkayn15@gmail.com",date:"2026-04-17",activated:false},
+  {name:"FürAi",email:"furai8492@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Kalbir Sohi",email:"kalbir@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Roshan Abraham",email:"rosh.100yx@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Dinary Pay",email:"dinarypay@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Joshua Alexander",email:"alexander.joshua2018@gmail.com",date:"2026-04-17",activated:false},
+  {name:"JoseSholly",email:"josepholawuyi30@gmail.com",date:"2026-04-17",activated:false},
+  {name:"WaeveFX (WaeveFX Virtual School)",email:"nabil.kechiche.9711@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Abdulkabir Musa",email:"musaabdulkabeer19@gmail.com",date:"2026-04-17",activated:false},
+  {name:"simon ballantyne",email:"simon@ballantyne.online",date:"2026-04-17",activated:true},
+  {name:"ian love",email:"ianlove472@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Finn Fess",email:"finn@digilize.agency",date:"2026-04-17",activated:false},
+  {name:"Syndicate Free fire",email:"freefiresyndicate@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Jacob Mitchinson",email:"jake@auditory.co",date:"2026-04-17",activated:false},
+  {name:"Shaun Sweat",email:"shaun@sweat-digital.com",date:"2026-04-17",activated:false},
+  {name:"Isaiah",email:"iloriisaiah1@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Sidharth Das",email:"sdas.engineer@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Prashant Singh",email:"babitasingh1569@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Assah Bismark",email:"assah9799@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Raj Donthala",email:"rsekhardonthala@together.ai",date:"2026-04-17",activated:false},
+  {name:"",email:"seunmanuel@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Snake",email:"giggle99647@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Sanjay",email:"sanjayaiml2006@gmail.com",date:"2026-04-17",activated:false},
+  {name:"",email:"sloom99864321@gmail.com",date:"2026-04-17",activated:false},
+  {name:"OlwinTest",email:"olwintestmod@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Freddie Coleman",email:"freddie.coleman@protonmail.com",date:"2026-04-17",activated:false},
+  {name:"Len Hoare",email:"lenhoare77@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Eli Lourens",email:"elilourens123@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Profile1",email:"ron1970.gates@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Elazar Leibovich",email:"elazarl@gmail.com",date:"2026-04-17",activated:true},
+  {name:"David Irvine",email:"david@saorsalabs.com",date:"2026-04-17",activated:true},
+  {name:"George Antonopoulos",email:"geeobcr@gmail.com",date:"2026-04-17",activated:true},
+  {name:"Rachel Black",email:"soundbyrachel@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Alara Dirik",email:"alaradirik@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Aiden Hawkins",email:"aidenhawkins2004@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Ribbons",email:"github.reopen815@passmail.com",date:"2026-04-17",activated:false},
+  {name:"Gemini",email:"g47713491@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Ramappa Hanamannavar",email:"ramappahanamannavar00@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Ling Li",email:"ling@techarge.co.uk",date:"2026-04-17",activated:false},
+  {name:"jainil download",email:"jainildownload@gmail.com",date:"2026-04-17",activated:false},
+  {name:"",email:"lukasawalliser@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Jamie C",email:"jsortless@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Ameet Patil",email:"ammubhai@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Blake Henstock",email:"veleuthe@gmail.com",date:"2026-04-17",activated:false},
+  {name:"",email:"jan.pressler@t-systems.com",date:"2026-04-17",activated:false},
+  {name:"Edgar Baumann",email:"edgarbaumann21032006@gmail.com",date:"2026-04-17",activated:false},
+  {name:"John Crickett",email:"john@trivialbusiness.co.uk",date:"2026-04-17",activated:false},
+  {name:"Gonzalo Perez",email:"gperez0x@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Dayan G",email:"dayangraham50@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Sam",email:"sambrennan92@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Jakob Appel Nordengen",email:"jakobappel22@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Tony Piper",email:"tpiper@tpiper.com",date:"2026-04-17",activated:false},
+  {name:"Paula Keve",email:"paulakeve@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Michael lovell",email:"tekexpress2013@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Mohammed Nadeem",email:"xna.dmx@gmail.com",date:"2026-04-17",activated:false},
+  {name:"",email:"mhstella@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Jakub Stibůrek",email:"alcolp96@gmail.com",date:"2026-04-17",activated:false},
+  {name:"JIkaa Jikaaa",email:"kiezaboy@gmail.com",date:"2026-04-17",activated:false},
+  {name:"",email:"christiankuhlmann@protonmail.com",date:"2026-04-17",activated:false},
+  {name:"Matthew Brayne",email:"mbrayne2316@gmail.com",date:"2026-04-17",activated:false},
+  {name:"MERU GOKHALE",email:"editoriallyglobal@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Shumba",email:"dmutanga@gmail.com",date:"2026-04-17",activated:false},
+  {name:"John John",email:"emperorduke5@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Jovan Howell",email:"joevan8484@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Ian H Smith",email:"ian.smith@beingguided.com",date:"2026-04-17",activated:true},
+  {name:"Mohale Moagi",email:"mohale302@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Maximilian Jendrall",email:"max@1d.de",date:"2026-04-17",activated:false},
+  {name:"David Flashman",email:"flashmandavid@gmail.com",date:"2026-04-17",activated:false},
+  {name:"manager bb",email:"managerbb0@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Sandeep Kadali",email:"ksandeep22a21a0223@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Xp L",email:"lixinpengde@gmail.com",date:"2026-04-17",activated:false},
+  {name:"The Gatoo Meow",email:"thegatoomeow@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Paper Benni",email:"paperbenni@gmail.com",date:"2026-04-17",activated:false},
+  {name:"! NotYourZihan <$",email:"zihanxd@proton.me",date:"2026-04-17",activated:false},
+  {name:"Wangdi",email:"wangs5050@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Antoine",email:"antoine@altovia.tech",date:"2026-04-17",activated:false},
+  {name:"Tester",email:"thisisabugtesting@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Bilal Ansari",email:"bilalqnsari987@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Mahmoud Ahmed (audam)",email:"audam11@gmail.com",date:"2026-04-17",activated:false},
+  {name:"JRG",email:"jr.gantt@icloud.com",date:"2026-04-17",activated:false},
+  {name:"Biswas Sekhar",email:"biswas.siv@gmail.com",date:"2026-04-17",activated:false},
+  {name:"# DILLI",email:"dillibaskarank@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Dylan Kaleba",email:"dylanklb81@gmail.com",date:"2026-04-17",activated:false},
+  {name:"smol",email:"smolboon@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Sanket Ghia",email:"sanket.ghia@trilogy.com",date:"2026-04-17",activated:false},
+  {name:"Mohamed Yassine Hemissi",email:"hemissiyassine@gmail.com",date:"2026-04-17",activated:false},
+  {name:"",email:"sharanpal.suri@me.com",date:"2026-04-17",activated:false},
+  {name:"marcus finley",email:"marcus@getdisruptive.ai",date:"2026-04-17",activated:false},
+  {name:"江浩瀚星河",email:"2983511141@qq.com",date:"2026-04-17",activated:false},
+  {name:"José Navegantes Junior",email:"navegantesjr@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Goverdhan Prajapat",email:"goverdhanrj331001@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Souvik Patra",email:"souvik56patra@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Yi Zhong",email:"vincentzhongy+gh@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Catherine Nelson",email:"workidea998@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Cheikh Gaye Gadji",email:"gadjimotion@gmail.com",date:"2026-04-17",activated:false},
+  {name:"STROM EAGLE",email:"eaglestrom879@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Mahmoud Khaled",email:"mahmoudd.khaled95@gmail.com",date:"2026-04-17",activated:false},
+  {name:"ibrahim khaled",email:"ibrahim.k.shaltout@gmail.com",date:"2026-04-17",activated:false},
+  {name:"محمد امین سیروسی",email:"moh1383d@gmail.com",date:"2026-04-17",activated:false},
+  {name:"Danial Jo",email:"google@email.sendithere.co",date:"2026-04-17",activated:false},
+  {name:"Canada VPN",email:"vpn.canadaaaa@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Kartik Kabadi",email:"1kartikkabadi1@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Peter Mischek",email:"pmischek3@gmail.com",date:"2026-04-16",activated:false},
+  {name:"",email:"hyovio@gmail.com",date:"2026-04-16",activated:false},
+  {name:"AMAR",email:"marenjeamar4734@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Chaitanya Sharma",email:"chaitanya@3bandar.org",date:"2026-04-16",activated:false},
+  {name:"Diogo Silva",email:"diogonnobrega@gmail.com",date:"2026-04-16",activated:false},
+  {name:"",email:"hxadogar@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Ricardo Santis",email:"ricardo.santis@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Richard Sabo",email:"richardsabo333@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Tim Seears",email:"tseears@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Jashan Sekhon",email:"idtopromotsite@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Zachary Dive",email:"zach_dive@berkeley.edu",date:"2026-04-16",activated:false},
+  {name:"Max Schubert",email:"max.schubert5@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Edict",email:"edict0011@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Bryant",email:"ivixuxeko407@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Jagmohan Yadav",email:"jagmohanyadav256@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Karan",email:"karanupatel139@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Naveen Saharan",email:"connect2saharannaveen@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Aman Srivastava",email:"amanrocks11@gmail.com",date:"2026-04-16",activated:false},
+  {name:"SANKAR N",email:"nagarajansankar@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Jason Hill",email:"jasonhillnb@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Solifer",email:"4e0n.initiate@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Ronak Aheer",email:"ronakaheer15@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Vijay kushwaha",email:"vijaykushwaha86885@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Богдан Сербін",email:"bodyserbin@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Surendhar S",email:"ssurendhar684@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Gaurav Singh",email:"acad.grv97@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Raza Ullah",email:"razaullah51@gmail.com",date:"2026-04-16",activated:false},
+  {name:"EDDM4",email:"eddm4hex@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Lakshman Patel",email:"lp141015@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Hhahahqh Yauqjhwhw",email:"yauqjhwhwhhahahqh@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Allysson Rodrigues",email:"alissonrodriig@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Rowan Foley-Marshall",email:"rowanajmarshall@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Vrutin Tarunchandra",email:"vrutin@gmail.com",date:"2026-04-16",activated:false},
+  {name:"BHAVYA BHUSHAN",email:"bhvbhushan7@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Emiliano Conti",email:"econtirodriguez@gmail.com",date:"2026-04-16",activated:false},
+  {name:"",email:"bissou670@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Rahul Agarwal",email:"rahul@medplum.com",date:"2026-04-16",activated:false},
+  {name:"Theerasak Sukyanudid",email:"ping.clawd@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Chase Whitaker",email:"modaltest1@tutamail.com",date:"2026-04-16",activated:false},
+  {name:"",email:"charles.du@me.com",date:"2026-04-16",activated:false},
+  {name:"Fisayo Ariyo",email:"workservicet@gmail.com",date:"2026-04-16",activated:false},
+  {name:"SP Son",email:"spson.engineering@gmail.com",date:"2026-04-16",activated:true},
+  {name:"",email:"maxime1295@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Baptiste",email:"bchevallier@castelis.com",date:"2026-04-16",activated:false},
+  {name:"Ben Hanchett",email:"jamin504@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Diego Mercado",email:"mastergun27@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Jsjd",email:"jdidio9d@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Arthur Delion",email:"arthurdelion97@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Christoph Clement",email:"c.clement@khumbu.ai",date:"2026-04-16",activated:false},
+  {name:"Kevin Rajaram",email:"swiftkr@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Alessio B.",email:"brusegan@gmail.com",date:"2026-04-16",activated:false},
+  {name:"",email:"jake@rmstruckers.com",date:"2026-04-16",activated:false},
+  {name:"Sam D",email:"samd1111@gmail.com",date:"2026-04-16",activated:false},
+  {name:"DarkeTech",email:"vh@darketechnology.com",date:"2026-04-16",activated:true},
+  {name:"Fauzan Azhari Najib",email:"fauzan.najib@batumbu.id",date:"2026-04-16",activated:false},
+  {name:"陈宇哲（安而遇）",email:"cyz169@gmail.com",date:"2026-04-16",activated:false},
+  {name:"H R",email:"hrestelica@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Bekim isk",email:"bekimisk@gmail.com",date:"2026-04-16",activated:false},
+  {name:"atak Here",email:"atakhere20@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Matthew",email:"matthewduff49@gmail.com",date:"2026-04-16",activated:false},
+  {name:"blegaut",email:"b.legaut@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Omkar Yadav",email:"me@f22.dev",date:"2026-04-16",activated:false},
+  {name:"",email:"rogermbyrne@gmail.com",date:"2026-04-16",activated:false},
+  {name:"WinterArc",email:"winterarc2125@gmail.com",date:"2026-04-16",activated:false},
+  {name:"abhilaksh mahajan",email:"abhilakshmahajan18@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Lakksith Hariie",email:"lakksith@karbonbusiness.com",date:"2026-04-16",activated:false},
+  {name:"Neil Douek",email:"ndouek@mac.com",date:"2026-04-16",activated:true},
+  {name:"Kitty Dapp",email:"kittydapps@gmail.com",date:"2026-04-16",activated:true},
+  {name:"Paku",email:"paku3152@gmail.com",date:"2026-04-16",activated:false},
+  {name:"Ethan Setnik",email:"ethan@prodigyems.com",date:"2026-04-16",activated:false},
+  {name:"Zhang Mengzhe",email:"221210400423@stu.haut.edu.cn",date:"2026-04-16",activated:false},
+  {name:"훈이",email:"busan.hoon2@gmail.com",date:"2026-04-15",activated:false},
+  {name:"UI UX",email:"gregory.desplaces@gmail.com",date:"2026-04-15",activated:false},
+  {name:"Ali Qadeeh",email:"aliqadeeh2@gmail.com",date:"2026-04-15",activated:false},
+  {name:"",email:"musnit+agent@gmail.com",date:"2026-04-15",activated:false},
+  {name:"Ai Ai",email:"inteligenciaai07@gmail.com",date:"2026-04-15",activated:false},
+  {name:"Natalie M",email:"natalie.moore831@gmail.com",date:"2026-04-15",activated:false},
+  {name:"Louis Nicolle",email:"lnicolle@streem.eu",date:"2026-04-15",activated:false},
+  {name:"Kailash Murali T",email:"kailashmurali.t2023@vitstudent.ac.in",date:"2026-04-15",activated:false},
+  {name:"Chirag Chopra",email:"chirag.chopra@live.com",date:"2026-04-14",activated:false},
+  {name:"RAJA AWAIS",email:"projectresearch055@gmail.com",date:"2026-04-14",activated:false},
+  {name:"Kunwei Zhang",email:"kunweiz92@gmail.com",date:"2026-04-14",activated:false},
+  {name:"James Ole",email:"jamesolesenn@gmail.com",date:"2026-04-14",activated:false},
+  {name:"giovani de souza",email:"gvnnsza@gmail.com",date:"2026-04-14",activated:false},
+  {name:"Burner",email:"burnerspinosaurus@gmail.com",date:"2026-04-14",activated:false},
+  {name:"King Homme",email:"kinghomme848@gmail.com",date:"2026-04-13",activated:false},
+  {name:"Ethan Hunt",email:"iaminmemumscar@gmail.com",date:"2026-04-13",activated:false},
+  {name:"Muslimin",email:"elmuslim05@gmail.com",date:"2026-04-13",activated:false},
+  {name:"Colin Kenney",email:"ckenney.26@pomfret.org",date:"2026-04-13",activated:false},
+  {name:"Arunim Chaudhary",email:"arunim2@gmail.com",date:"2026-04-13",activated:false},
+  {name:"Barin Adegboye",email:"barinadegboye@gmail.com",date:"2026-04-13",activated:false},
+  {name:"Savage Bee",email:"bee403275@gmail.com",date:"2026-04-13",activated:false},
+  {name:"",email:"13637222605@163.com",date:"2026-04-13",activated:false},
+  {name:"",email:"2771404446@qq.com",date:"2026-04-13",activated:false},
+  {name:"",email:"1182673827@qq.com",date:"2026-04-13",activated:false},
+  {name:"bms560",email:"bmsullivan560@gmail.com",date:"2026-04-13",activated:true},
+  {name:"竹虫",email:"zhuchong59@gmail.com",date:"2026-04-13",activated:false},
+  {name:"Bnejamin",email:"benjamin123462880@gmail.com",date:"2026-04-12",activated:false},
+  {name:"ismoil",email:"isa.ch0407@gmail.com",date:"2026-04-12",activated:false},
+  {name:"",email:"geje79652@gmail.com",date:"2026-04-12",activated:false},
+  {name:"mansoor khan",email:"mansoorblue01@gmail.com",date:"2026-04-12",activated:false},
+  {name:"19 Istiqomah",email:"iistiqomah015@gmail.com",date:"2026-04-12",activated:false},
+  {name:"Ibne charyf mohamed",email:"simoimagine@gmail.com",date:"2026-04-12",activated:false},
+  {name:"Atharva Senpai!?",email:"goleatharva97@gmail.com",date:"2026-04-11",activated:false},
+  {name:"",email:"royalaadi.work@gmail.com",date:"2026-04-11",activated:false},
+  {name:"Shashi Ranjan kumar",email:"sk532593@gmail.com",date:"2026-04-11",activated:false},
+  {name:"快樂",email:"opto7174@gmail.com",date:"2026-04-11",activated:false}
+];
+
+function initSignups() {
+  new Chart(document.getElementById('signupsChart'), { type:'bar', data:{ labels:signupsLabels, datasets:[{ data:signupsData, backgroundColor:signupsData.map((v,i) => i===signupsLabels.length-1 ? 'rgba(108,92,231,0.9)' : 'rgba(108,92,231,0.35)'), borderRadius:4, borderSkipped:false, barPercentage:0.7 }] }, options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false}, plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{title:ctx=>ctx[0].label,label:ctx=>ctx.parsed.y+' sign-ups'}}}, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}, y:{grid:gridOpts,beginAtZero:true} } } });
+
+  let html='<thead><tr><th>#</th><th>Name</th><th>Email</th><th>Date</th><th>Activated</th></tr></thead><tbody>';
+  if (signupsList.length === 0) {
+    html+='<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px;">No sign-ups data</td></tr>';
+  } else {
+    signupsList.forEach((u,i)=>{
+      const act = u.activated ? '<span style="color:var(--green);font-weight:600;">Yes</span>' : '';
+      html+=`<tr><td class="rank-cell">${i+1}</td><td>${u.name||'—'}</td><td class="user-email">${u.email}</td><td>${u.date}</td><td>${act}</td></tr>`;
+    });
+  }
+  html+='</tbody>';
+  document.getElementById('signupsTable').innerHTML=html;
+}
+
+// ═══ Inference ═══
+const inferenceSpenders = [
+  {email:"mixollieg@gmail.com",calls:179954,cost:27326},
+  {email:"rentfrancisc@gmail.com",calls:48964,cost:7356},
+  {email:"stud0709.github@gmail.com",calls:22638,cost:5303},
+  {email:"dishants@gmail.com",calls:14938,cost:3565},
+  {email:"zakker690@gmail.com",calls:28952,cost:2637},
+  {email:"charis@algomo.com",calls:10713,cost:2464},
+  {email:"evanlew15601@gmail.com",calls:30881,cost:2341},
+  {email:"edward.zion.26@gmail.com",calls:7163,cost:2291},
+  {email:"maratheyash108@gmail.com",calls:14591,cost:1918},
+  {email:"gabszuromi@gmail.com",calls:8410,cost:1463},
+  {email:"esetnik@gmail.com",calls:6042,cost:1398},
+  {email:"olegalazz@gmail.com",calls:15658,cost:1385},
+  {email:"michal.styk@powerex.io",calls:3409,cost:1312},
+  {email:"manish@mangoitsolutions.com",calls:6274,cost:1191}
+];
+
+function initInference() {
+  // Daily cost chart
+  const costLabels = ["Mar 11","Mar 12","Mar 13","Mar 14","Mar 15","Mar 16","Mar 17","Mar 18","Mar 19","Mar 20","Mar 21","Mar 22","Mar 23","Mar 24","Mar 25","Mar 26","Mar 27","Mar 28","Mar 29","Mar 30","Mar 31","Apr 1","Apr 2","Apr 3","Apr 4","Apr 5","Apr 6","Apr 7","Apr 8","Apr 9"];
+  const costData = [1486,3469,3660,1509,2466,4462,4419,1696,2690,1488,1338,5139,4240,4363,4414,2401,4865,5321,3254,2922,5446,1883,1106,755,1553,868,1152,1139,1170,1137];
+  const costMax = Math.max(...costData);
+  new Chart(document.getElementById('inferenceCostChart'), { type:'bar', data:{ labels:costLabels, datasets:[{ data:costData, backgroundColor:costData.map(v => v>=4000?'rgba(232,67,147,0.8)':v>=2000?'rgba(232,67,147,0.5)':'rgba(232,67,147,0.3)'), borderRadius:4, borderSkipped:false, barPercentage:0.65 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>'$'+ctx.parsed.y.toLocaleString()}} }, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}, y:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>'$'+(v/1000).toFixed(1)+'k'}} } } });
+
+  // Model cost breakdown (horizontal bar)
+  const modelLabels = ["Sonnet 4.6","GPT-5.2","GPT-5.4","Opus 4.6","GPT-5.3 Codex","Gemini 3.1 Pro","GPT-5.2 Codex","Haiku 4.5"];
+  const modelCost = [44065,16473,13909,5568,1324,660,231,68];
+  const modelColors = ['rgba(232,67,147,0.8)','rgba(108,92,231,0.8)','rgba(51,154,240,0.8)','rgba(240,165,0,0.8)','rgba(0,214,143,0.8)','rgba(232,67,147,0.5)','rgba(108,92,231,0.5)','rgba(51,154,240,0.5)'];
+  new Chart(document.getElementById('inferenceModelChart'), { type:'bar', data:{ labels:modelLabels, datasets:[{ data:modelCost, backgroundColor:modelColors, borderRadius:6, borderSkipped:false, barPercentage:0.6 }] }, options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>'$'+ctx.parsed.x.toLocaleString()}} }, scales:{ x:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}, y:{grid:{display:false}} } } });
+
+  // Daily calls volume
+  const callsLabels = costLabels;
+  const callsData = [20407,30961,26542,22866,27229,46698,29963,20406,26277,26165,27748,30871,28519,33030,27745,20102,29659,25712,14628,12671,27319,26103,11579,9086,19392,10425,12725,9383,9081,9619];
+  new Chart(document.getElementById('inferenceCallsChart'), { type:'line', data:{ labels:callsLabels, datasets:[{ data:callsData, borderColor:'#e84393', backgroundColor:'rgba(232,67,147,0.08)', borderWidth:2.5, fill:true, tension:0.35, pointRadius:3, pointBackgroundColor:'#e84393', pointBorderColor:'#12121a', pointBorderWidth:2, pointHoverRadius:6 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>ctx.parsed.y.toLocaleString()+' calls'}} }, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}, y:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>(v/1000).toFixed(0)+'k'}} } } });
+
+  // Top spenders table
+  const maxCost = inferenceSpenders[0].cost;
+  let html='<thead><tr><th>#</th><th>User</th><th>API Calls</th><th>Cost (30d)</th></tr></thead><tbody>';
+  inferenceSpenders.forEach((u,i)=>{
+    const rc=i<3?'rank-'+(i+1):'';
+    const medal=i===0?'&#x1F947;':i===1?'&#x1F948;':i===2?'&#x1F949;':'';
+    const pct=(u.cost/maxCost*100).toFixed(0);
+    html+=`<tr><td class="rank-cell ${rc}">${medal||(i+1)}</td><td class="user-email">${u.email}</td><td>${u.calls.toLocaleString()}</td><td class="score-bar-cell"><div class="score-bar-wrap"><div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,#e84393,#6c5ce7);"></div></div><span class="score-val" style="color:#e84393;">$${u.cost.toLocaleString()}</span></div></td></tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('inferenceSpendersTable').innerHTML=html;
+}
+
+// ═══ Inference ═══
+function initInference() {
+  // Daily cost chart
+  const costLabels = ["Mar 11","Mar 12","Mar 13","Mar 14","Mar 15","Mar 16","Mar 17","Mar 18","Mar 19","Mar 20","Mar 21","Mar 22","Mar 23","Mar 24","Mar 25","Mar 26","Mar 27","Mar 28","Mar 29","Mar 30","Mar 31","Apr 1","Apr 2","Apr 3","Apr 4","Apr 5","Apr 6","Apr 7","Apr 8","Apr 9","Apr 10"];
+  const costData = [1486,3469,3660,1509,2466,4462,4419,1696,2690,1488,1338,5139,4240,4363,4414,2401,4865,5321,3254,2922,5446,1883,1106,755,1553,868,1152,1139,1170,1137,615];
+  const costMax = Math.max(...costData);
+  new Chart(document.getElementById('inferenceCostChart'), { type:'bar', data:{ labels:costLabels, datasets:[{ data:costData, backgroundColor:costData.map(v => v>=5000?'rgba(232,67,147,0.8)':v>=3000?'rgba(232,67,147,0.5)':'rgba(232,67,147,0.3)'), borderRadius:4, borderSkipped:false, barPercentage:0.7 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>'$'+ctx.parsed.y.toLocaleString()}} }, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}, y:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>'$'+(v/1000).toFixed(1)+'k'}} } } });
+
+  // Model cost breakdown (horizontal bar)
+  const modelLabels = ["Sonnet 4.6","GPT-5.2","GPT-5.4","Opus 4.6","GPT-5.3 Codex","Gemini 3.1 Pro","GPT-5.2 Codex","Haiku 4.5"];
+  const modelCosts = [44065,16473,13909,5568,1324,660,231,68];
+  const modelColors = ['rgba(232,67,147,0.8)','rgba(108,92,231,0.7)','rgba(108,92,231,0.5)','rgba(240,165,0,0.7)','rgba(51,154,240,0.6)','rgba(0,214,143,0.6)','rgba(51,154,240,0.4)','rgba(0,214,143,0.4)'];
+  new Chart(document.getElementById('inferenceModelChart'), { type:'bar', data:{ labels:modelLabels, datasets:[{ data:modelCosts, backgroundColor:modelColors, borderRadius:6, borderSkipped:false, barPercentage:0.7 }] }, options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>'$'+ctx.parsed.x.toLocaleString()}} }, scales:{ x:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}, y:{grid:{display:false}} } } });
+
+  // Daily calls volume
+  const callsData = [20407,30961,26542,22866,27229,46698,29963,20406,26277,26165,27748,30871,28519,33030,27745,20102,29659,25712,14628,12671,27319,26103,11579,9086,19392,10425,12725,9383,9081,9619,5915];
+  new Chart(document.getElementById('inferenceCallsChart'), { type:'line', data:{ labels:costLabels, datasets:[{ data:callsData, borderColor:'#e84393', backgroundColor:'rgba(232,67,147,0.08)', borderWidth:2.5, fill:true, tension:0.3, pointRadius:3, pointBackgroundColor:'#e84393', pointBorderColor:'#12121a', pointBorderWidth:2, pointHoverRadius:6 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{...tooltipOpts,callbacks:{label:ctx=>ctx.parsed.y.toLocaleString()+' calls'}} }, scales:{ x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:10}}, y:{grid:gridOpts,beginAtZero:true,ticks:{callback:v=>(v/1000).toFixed(0)+'k'}} } } });
+
+  // Top spenders table
+  const spenders = [
+    {email:"mixollieg@gmail.com",calls:179954,cost:27326},
+    {email:"rentfrancisc@gmail.com",calls:48964,cost:7356},
+    {email:"stud0709.github@gmail.com",calls:22638,cost:5303},
+    {email:"dishants@gmail.com",calls:14938,cost:3565},
+    {email:"zakker690@gmail.com",calls:28952,cost:2637},
+    {email:"charis@algomo.com",calls:10713,cost:2464},
+    {email:"evanlew15601@gmail.com",calls:30881,cost:2341},
+    {email:"edward.zion.26@gmail.com",calls:7163,cost:2291},
+    {email:"maratheyash108@gmail.com",calls:14591,cost:1918},
+    {email:"gabszuromi@gmail.com",calls:8410,cost:1463},
+    {email:"esetnik@gmail.com",calls:6042,cost:1398},
+    {email:"olegalazz@gmail.com",calls:15658,cost:1385},
+    {email:"michal.styk@powerex.io",calls:3409,cost:1312},
+    {email:"manish@mangoitsolutions.com",calls:6274,cost:1191}
+  ];
+  const maxCost = spenders[0].cost;
+  let html='<thead><tr><th>#</th><th>User</th><th>API Calls</th><th>Cost (30d)</th></tr></thead><tbody>';
+  spenders.forEach((u,i)=>{
+    const rc=i<3?'rank-'+(i+1):'';
+    const medal=i===0?'&#x1F947;':i===1?'&#x1F948;':i===2?'&#x1F949;':'';
+    const pct=(u.cost/maxCost*100).toFixed(0);
+    html+=`<tr><td class="rank-cell ${rc}">${medal||(i+1)}</td><td class="user-email">${u.email}</td><td>${u.calls.toLocaleString()}</td><td class="score-bar-cell"><div class="score-bar-wrap"><div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,#e84393,#6c5ce7)"></div></div><span class="score-val">$${u.cost.toLocaleString()}</span></div></td></tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('inferenceSpendersTable').innerHTML=html;
+}
+
+// ═══ Leaderboard ═══
+const users30d = [
+  {email:"dishants@gmail.com",inference:1134,days:28},
+  {email:"mixollieg@gmail.com",inference:798,days:10},
+  {email:"manish@mangoitsolutions.com",inference:796,days:25},
+  {email:"salwaessaf@gmail.com",inference:440,days:6},
+  {email:"stud0709.github@gmail.com",inference:409,days:12},
+  {email:"lstotler079@gmail.com",inference:408,days:31},
+  {email:"ramynoureldien@gmail.com",inference:370,days:22},
+  {email:"aewesome@proton.me",inference:358,days:5},
+  {email:"zakker690@gmail.com",inference:357,days:4},
+  {email:"gabszuromi@gmail.com",inference:339,days:20},
+  {email:"yashdeep.sharma2@gmail.com",inference:240,days:5},
+  {email:"willywang8216@gmail.com",inference:226,days:12},
+  {email:"andrey.kupriytsuk@gmail.com",inference:226,days:6},
+  {email:"edward.zion.26@gmail.com",inference:198,days:16},
+  {email:"xiaori100@gmail.com",inference:194,days:6}
+];
+const usersAllTime = [
+  {email:"zakker690@gmail.com",inference:20734,days:143},
+  {email:"andrey.kupriytsuk@gmail.com",inference:15765,days:162},
+  {email:"cris.flagg@gmail.com",inference:15254,days:218},
+  {email:"salwaessaf@gmail.com",inference:14016,days:124},
+  {email:"mixollieg@gmail.com",inference:13052,days:104},
+  {email:"3sc4pm3@gmail.com",inference:12508,days:77},
+  {email:"yashdeep.sharma2@gmail.com",inference:11704,days:149},
+  {email:"janithmanodaya2002@gmail.com",inference:8491,days:60},
+  {email:"shadowye70@gmail.com",inference:7735,days:82},
+  {email:"msudick02@gmail.com",inference:7733,days:98},
+  {email:"evanlew15601@gmail.com",inference:7329,days:78},
+  {email:"crimexia@gmail.com",inference:6654,days:56},
+  {email:"psychoactive28@gmail.com",inference:5808,days:23},
+  {email:"ojosbourne@live.co.uk",inference:5724,days:33},
+  {email:"olegsistem@gmail.com",inference:5551,days:72}
+];
+
+
+
+function showLeaderboard(view, btn) {
+  btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const data = view==='30d' ? users30d : usersAllTime;
+  const maxInference = data[0]?.inference || 1;
+  let html='<thead><tr><th>#</th><th>User</th><th>Active Days</th><th>Inference Spend</th></tr></thead><tbody>';
+  data.forEach((u,i)=>{
+    const rc=i<3?'rank-'+(i+1):'';
+    const medal=i===0?'&#x1F947;':i===1?'&#x1F948;':i===2?'&#x1F949;':'';
+    const pct=(u.inference/maxInference*100).toFixed(0);
+    html+=`<tr><td class="rank-cell ${rc}">${medal||(i+1)}</td><td class="user-email">${u.email}</td><td>${u.days}</td><td class="score-bar-cell"><div class="score-bar-wrap"><div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%"></div></div><span class="score-val">$${u.inference.toLocaleString()}</span></div></td></tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('leaderboardTable').innerHTML=html;
+}
+
+// Init web app page on load
+initWebApp();
+chartsInitialized.webapp = true;
+showLeaderboard('30d', document.querySelector('.tab-bar .tab-btn'));
+</script>
+
+</body>
+</html>
