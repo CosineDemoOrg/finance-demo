@@ -649,13 +649,13 @@ class TestFeeChangeBanner(unittest.TestCase):
     @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
     @patch('api_call.get')
     def test_fee_change_banner_contains_correct_message(self, mock_api_get):
-        """Banner contains the correct fee change message mentioning 0.6%."""
+        """Banner contains the correct fee change message mentioning 0.65%."""
         mock_api_get.side_effect = _mock_api_get_side_effect(balance=50000)
 
         self.test_app.set_cookie('token', EXAMPLE_TOKEN)
         response = self.test_app.get('/home')
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'0.6%', response.data)
+        self.assertIn(b'0.65%', response.data)
         self.assertIn(b'transaction fee', response.data)
 
     @patch('frontend.TracedThreadPoolExecutor', MockTracedThreadPoolExecutor)
@@ -671,9 +671,9 @@ class TestFeeChangeBanner(unittest.TestCase):
         self.assertIn(b'data-dismiss="alert"', response.data)
 
     def test_fee_rate_constant_is_zero_point_five_percent(self):
-        """TRANSACTION_FEE_RATE constant is 0.006 (0.6%)."""
+        """TRANSACTION_FEE_RATE constant is 0.0065 (0.65%)."""
         from decimal import Decimal
-        self.assertEqual(self.app_module.TRANSACTION_FEE_RATE, Decimal('0.006'))
+        self.assertEqual(self.app_module.TRANSACTION_FEE_RATE, Decimal('0.0065'))
 
 
 if __name__ == '__main__':

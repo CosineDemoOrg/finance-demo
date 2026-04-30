@@ -22,37 +22,37 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests verifying the 0.6% transaction fee rate.
+ * Tests verifying the 0.65% transaction fee rate.
  */
 class FeeChangeNoticeTest {
 
     @Test
-    @DisplayName("Transaction fee rate is set to 0.6%")
-    void feeRateIsZeroPointSixPercent() {
-        assertEquals(0.006, LedgerWriterController.TRANSACTION_FEE_RATE, 1e-9);
+    @DisplayName("Transaction fee rate is set to 0.65%")
+    void feeRateIsZeroPointSixFivePercent() {
+        assertEquals(0.0065, LedgerWriterController.TRANSACTION_FEE_RATE, 1e-9);
     }
 
     @Test
-    @DisplayName("0.6% fee on $10 payment is 6 cents")
-    void feeOnTenDollarsIsSixCents() {
+    @DisplayName("0.65% fee on $10 payment is 7 cents")
+    void feeOnTenDollarsIsSevenCents() {
         int amount = 1000; // $10 in cents
         int fee = (int) Math.round(amount * LedgerWriterController.TRANSACTION_FEE_RATE);
-        assertEquals(6, fee);
+        assertEquals(7, fee);
     }
 
     @Test
-    @DisplayName("0.6% fee on $100 payment is $0.60")
-    void feeOnOneHundredDollarsIsSixtyCents() {
+    @DisplayName("0.65% fee on $100 payment is $0.65")
+    void feeOnOneHundredDollarsIsSixtyFiveCents() {
         int amount = 10000; // $100 in cents
         int fee = (int) Math.round(amount * LedgerWriterController.TRANSACTION_FEE_RATE);
-        assertEquals(60, fee);
+        assertEquals(65, fee);
     }
 
     @Test
-    @DisplayName("0.6% fee on $1000 payment is $6.00")
-    void feeOnOneThousandDollarsIsSixDollars() {
+    @DisplayName("0.65% fee on $1000 payment is $6.50")
+    void feeOnOneThousandDollarsIsSixFiftyDollars() {
         int amount = 100000; // $1000 in cents
         int fee = (int) Math.round(amount * LedgerWriterController.TRANSACTION_FEE_RATE);
-        assertEquals(600, fee);
+        assertEquals(650, fee);
     }
 }
