@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
     RefreshModals();
   });
 
-  const FEE_RATE = 0.0065;
+  const FEE_RATE = 0.016;
 
   function formatUSD(cents) {
     return "$" + (cents / 100).toFixed(2);

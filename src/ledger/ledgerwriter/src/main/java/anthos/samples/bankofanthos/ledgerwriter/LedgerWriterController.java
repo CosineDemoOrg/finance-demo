@@ -67,7 +67,7 @@ public final class LedgerWriterController {
     public static final String READINESS_CODE = "ok";
     public static final String UNAUTHORIZED_CODE = "not authorized";
     public static final String JWT_ACCOUNT_KEY = "acct";
-    static final double TRANSACTION_FEE_RATE = 0.0065;
+    static final double TRANSACTION_FEE_RATE = 0.016;
 
     @Autowired
     RestTemplate restTemplate;
