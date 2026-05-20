@@ -124,7 +124,7 @@ class TransactionFeeTest {
 
     @Test
     @DisplayName("Given amount is $100 (10000 cents), " +
-            "fee is 180 cents (1.8%), total amount is 10180")
+            "fee is 170 cents (1.7%), total amount is 10170")
     void feeOnOneHundredDollars(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -133,7 +133,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        doReturn(10180).when(spyController).getAvailableBalance(
+        doReturn(10170).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -143,12 +143,12 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(10180);
+        verify(transaction).setAmount(10170);
     }
 
     @Test
     @DisplayName("Given amount is $1000 (100000 cents), " +
-            "fee is 1800 cents (1.8%), total amount is 101800")
+            "fee is 1700 cents (1.7%), total amount is 101700")
     void feeOnOneThousandDollars(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -157,7 +157,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(100000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        doReturn(101800).when(spyController).getAvailableBalance(
+        doReturn(101700).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -167,7 +167,7 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(101800);
+        verify(transaction).setAmount(101700);
     }
 
     @Test
@@ -181,7 +181,7 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        // Balance of 10050 covers 10000 but not 10000+180=10180 (1.8% fee)
+        // Balance of 10050 covers 10000 but not 10000+170=10170 (1.7% fee)
         doReturn(10050).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
@@ -207,8 +207,8 @@ class TransactionFeeTest {
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(
                 testInfo.getDisplayName());
-        // Balance of 10180 exactly covers 10000+180=10180 (1.8% fee)
-        doReturn(10180).when(spyController).getAvailableBalance(
+        // Balance of 10170 exactly covers 10000+170=10170 (1.7% fee)
+        doReturn(10170).when(spyController).getAvailableBalance(
                 TOKEN, AUTHED_ACCOUNT_NUM);
 
         // When
@@ -224,7 +224,7 @@ class TransactionFeeTest {
 
     @Test
     @DisplayName("Given amount is 150 cents, " +
-            "fee rounds to 3 (1.8% of 150 = 2.7), total amount is 153")
+            "fee rounds to 3 (1.7% of 150 = 2.55), total amount is 153")
     void feeRoundsCorrectly(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -248,7 +248,7 @@ class TransactionFeeTest {
 
     @Test
     @DisplayName("Given amount is $100,000 (10000000 cents), " +
-            "fee is 180000 cents (1.8%), total amount is 10180000")
+            "fee is 170000 cents (1.7%), total amount is 10170000")
     void feeOnLargeAmount(TestInfo testInfo) {
         // Given
         LedgerWriterController spyController = spy(ledgerWriterController);
@@ -267,6 +267,6 @@ class TransactionFeeTest {
         // Then
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(10180000);
+        verify(transaction).setAmount(10170000);
     }
 }

@@ -98,40 +98,40 @@ class TransactionFeeTest {
 
     @Test
     @DisplayName("Given amount is $100 (10000 cents), " +
-            "fee is 160 cents (1.6%), total amount is 10160")
+            "fee is 150 cents (1.7%), total amount is 10150")
     void feeOnOneHundredDollars(TestInfo testInfo) {
         LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
-        doReturn(10160L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
+        doReturn(10170L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(10160);
+        verify(transaction).setAmount(10170);
     }
 
     @Test
     @DisplayName("Given amount is $1000 (100000 cents), " +
-            "fee is 1600 cents (1.6%), total amount is 101600")
+            "fee is 1700 cents (1.7%), total amount is 101700")
     void feeOnOneThousandDollars(TestInfo testInfo) {
         LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(100000);
         when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
-        doReturn(101600L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
+        doReturn(101700L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(101600);
+        verify(transaction).setAmount(101700);
     }
 
     @Test
@@ -143,7 +143,7 @@ class TransactionFeeTest {
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
-        // Balance of 10050 covers 10000 but not 10000+160=10160 (1.6% fee)
+        // Balance of 10050 covers 10000 but not 10000+170=10170 (1.7% fee)
         doReturn(10050L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
         final ResponseEntity actualResult =
@@ -162,8 +162,8 @@ class TransactionFeeTest {
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000);
         when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
-        // Balance of 10160 exactly covers 10000+160=10160 (1.6% fee)
-        doReturn(10160L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
+        // Balance of 10150 exactly covers 10000+150=10150 (1.7% fee)
+        doReturn(10170L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
@@ -175,7 +175,7 @@ class TransactionFeeTest {
 
     @Test
     @DisplayName("Given amount is 150 cents, " +
-            "fee rounds to 2 (1.6% of 150 = 2.4), total amount is 152")
+            "fee rounds to 3 (1.7% of 150 = 2.55), total amount is 153")
     void feeRoundsCorrectly(TestInfo testInfo) {
         LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
@@ -189,25 +189,25 @@ class TransactionFeeTest {
 
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(152);
+        verify(transaction).setAmount(153);
     }
 
     @Test
     @DisplayName("Given amount is $100,000 (10000000 cents), " +
-            "fee is 160000 cents (1.6%), total amount is 10160000")
+            "fee is 170000 cents (1.7%), total amount is 10170000")
     void feeOnLargeAmount(TestInfo testInfo) {
         LedgerMonolithController spyController = spy(ledgerMonolithController);
         when(transaction.getFromRoutingNum()).thenReturn(LOCAL_ROUTING_NUM);
         when(transaction.getFromAccountNum()).thenReturn(AUTHED_ACCOUNT_NUM);
         when(transaction.getAmount()).thenReturn(10000000);
         when(transaction.getRequestUuid()).thenReturn(testInfo.getDisplayName());
-        doReturn(10160000L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
+        doReturn(10170000L).when(spyController).getAvailableBalance(AUTHED_ACCOUNT_NUM);
 
         final ResponseEntity actualResult =
                 spyController.addTransaction(BEARER_TOKEN, transaction);
 
         assertNotNull(actualResult);
         assertEquals(HttpStatus.CREATED, actualResult.getStatusCode());
-        verify(transaction).setAmount(10160000);
+        verify(transaction).setAmount(10170000);
     }
 }
