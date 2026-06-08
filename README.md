@@ -24,6 +24,8 @@ If you are using Bank of Anthos, please ★Star this repository to show your int
 
 ![Architecture Diagram](/docs/img/architecture.png)
 
+[View interactive architecture diagram](/docs/architecture-diagram.html)
+
 | Service                                                 | Language      | Description                                                                                                                                  |
 | ------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | [frontend](/src/frontend)                              | Python        | Exposes an HTTP server to serve the website. Contains login page, signup page, and home page.                                                |

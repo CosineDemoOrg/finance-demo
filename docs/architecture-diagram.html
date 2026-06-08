@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bank of Anthos — Architecture Diagram</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --surface: #1a1d23;
+    --border: #2a2e37;
+    --text: #e8e8ec;
+    --text-muted: #a0a0a8;
+    --python: #4a9eff;
+    --java: #f89820;
+    --postgres: #336791;
+    --accent: #7c3aed;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    margin: 0;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 {
+    font-weight: 500;
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 2rem;
+  }
+  svg {
+    max-width: 960px;
+    width: 100%;
+    height: auto;
+  }
+  .node {
+    cursor: pointer;
+  }
+  .node rect, .node circle, .node path {
+    transition: all 0.2s ease;
+  }
+  .node:hover rect, .node:hover circle, .node:hover path.shape {
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.15));
+    stroke-width: 2px;
+  }
+  .tooltip {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    max-width: 280px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 100;
+  }
+  .tooltip.visible {
+    opacity: 1;
+  }
+  .tooltip h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+  .tooltip .meta {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .tooltip .desc {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-right: 0.25rem;
+  }
+  .badge.python { background: rgba(74,158,255,0.15); color: #6eb8ff; }
+  .badge.java { background: rgba(248,152,32,0.15); color: #ffb84d; }
+  .badge.postgres { background: rgba(51,103,145,0.15); color: #5a9fd4; }
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 2rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+  .tier-label {
+    font-size: 0.75rem;
+    fill: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  text {
+    font-family: var(--font);
+    fill: var(--text);
+  }
+  .node-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  .node-sublabel {
+    font-size: 0.75rem;
+    fill: var(--text-muted);
+  }
+  .arrow {
+    stroke: #4a4f5a;
+    stroke-width: 1.5;
+    fill: none;
+    marker-end: url(#arrowhead);
+  }
+  .db-cylinder-top {
+    fill: var(--surface);
+    stroke: var(--border);
+  }
+  .db-cylinder-side {
+    fill: var(--surface);
+    stroke: var(--border);
+  }
+  .db-cylinder-top.java { stroke: var(--java); }
+  .db-cylinder-side.java { stroke: var(--java); }
+  .db-cylinder-top.python { stroke: var(--python); }
+  .db-cylinder-side.python { stroke: var(--python); }
+  .db-cylinder-top.postgres { stroke: var(--postgres); }
+  .db-cylinder-side.postgres { stroke: var(--postgres); }
+</style>
+</head>
+<body>
+<h1>Bank of Anthos — Architecture</h1>
+<div class="subtitle">Microservice topology, technology stacks, and data flows</div>
+
+<svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a4f5a" />
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Tier labels -->
+  <text x="480" y="30" text-anchor="middle" class="tier-label">Frontend & Load Generation</text>
+  <text x="480" y="280" text-anchor="middle" class="tier-label">Services Layer</text>
+  <text x="480" y="530" text-anchor="middle" class="tier-label">Data Layer</text>
+
+  <!-- Load Generator -->
+  <g class="node" data-name="loadgenerator" data-lang="Python / Locust" data-port="80" data-desc="Continuously sends requests imitating users to the frontend. Periodically creates new accounts and simulates transactions between them.">
+    <rect x="380" y="55" width="200" height="56" rx="8" fill="var(--surface)" stroke="var(--python)" stroke-width="1.5"/>
+    <text x="480" y="82" text-anchor="middle" class="node-label">loadgenerator</text>
+    <text x="480" y="100" text-anchor="middle" class="node-sublabel">Python / Locust</text>
+  </g>
+
+  <!-- Frontend -->
+  <g class="node" data-name="frontend" data-lang="Python (Flask)" data-port="80 / 8080" data-desc="Exposes an HTTP server to serve the website. Contains login page, signup page, and home page. Communicates with all backend services.">
+    <rect x="380" y="155" width="200" height="56" rx="8" fill="var(--surface)" stroke="var(--python)" stroke-width="1.5"/>
+    <text x="480" y="182" text-anchor="middle" class="node-label">frontend</text>
+    <text x="480" y="200" text-anchor="middle" class="node-sublabel">Python (Flask)</text>
+  </g>
+
+  <!-- Accounts tier background -->
+  <rect x="40" y="300" width="320" height="200" rx="12" fill="none" stroke="var(--border)" stroke-dasharray="4 4"/>
+  <text x="200" y="322" text-anchor="middle" class="tier-label" style="font-size: 0.65rem;">Accounts Tier</text>
+
+  <!-- User Service -->
+  <g class="node" data-name="userservice" data-lang="Python" data-port="8080" data-desc="Manages user accounts and authentication. Signs JWTs used for authentication by other services.">
+    <rect x="80" y="340" width="240" height="56" rx="8" fill="var(--surface)" stroke="var(--python)" stroke-width="1.5"/>
+    <text x="200" y="367" text-anchor="middle" class="node-label">userservice</text>
+    <text x="200" y="385" text-anchor="middle" class="node-sublabel">Python</text>
+  </g>
+
+  <!-- Contacts -->
+  <g class="node" data-name="contacts" data-lang="Python" data-port="8080" data-desc="Stores list of other accounts associated with a user. Used for drop-down in 'Send Payment' and 'Deposit' forms.">
+    <rect x="80" y="420" width="240" height="56" rx="8" fill="var(--surface)" stroke="var(--python)" stroke-width="1.5"/>
+    <text x="200" y="447" text-anchor="middle" class="node-label">contacts</text>
+    <text x="200" y="465" text-anchor="middle" class="node-sublabel">Python</text>
+  </g>
+
+  <!-- Ledger tier background -->
+  <rect x="400" y="300" width="520" height="200" rx="12" fill="none" stroke="var(--border)" stroke-dasharray="4 4"/>
+  <text x="660" y="322" text-anchor="middle" class="tier-label" style="font-size: 0.65rem;">Ledger Tier</text>
+
+  <!-- Ledger Writer -->
+  <g class="node" data-name="ledger-writer" data-lang="Java (Spring Boot)" data-port="8080" data-desc="Accepts and validates incoming transactions before writing them to the ledger database.">
+    <rect x="440" y="340" width="160" height="56" rx="8" fill="var(--surface)" stroke="var(--java)" stroke-width="1.5"/>
+    <text x="520" y="367" text-anchor="middle" class="node-label">ledger-writer</text>
+    <text x="520" y="385" text-anchor="middle" class="node-sublabel">Java (Spring Boot)</text>
+  </g>
+
+  <!-- Balance Reader -->
+  <g class="node" data-name="balance-reader" data-lang="Java (Spring Boot)" data-port="8080" data-desc="Provides efficient readable cache of user balances, as read from ledger-db.">
+    <rect x="620" y="340" width="160" height="56" rx="8" fill="var(--surface)" stroke="var(--java)" stroke-width="1.5"/>
+    <text x="700" y="367" text-anchor="middle" class="node-label">balance-reader</text>
+    <text x="700" y="385" text-anchor="middle" class="node-sublabel">Java (Spring Boot)</text>
+  </g>
+
+  <!-- Transaction History -->
+  <g class="node" data-name="transaction-history" data-lang="Java (Spring Boot)" data-port="8080" data-desc="Provides efficient readable cache of past transactions, as read from ledger-db.">
+    <rect x="800" y="340" width="160" height="56" rx="8" fill="var(--surface)" stroke="var(--java)" stroke-width="1.5"/>
+    <text x="880" y="367" text-anchor="middle" class="node-label">transaction-history</text>
+    <text x="880" y="385" text-anchor="middle" class="node-sublabel">Java (Spring Boot)</text>
+  </g>
+
+  <!-- Arrows from frontend to services -->
+  <!-- Frontend to userservice -->
+  <path class="arrow" d="M 420 211 Q 420 280 310 280 Q 200 280 200 340" />
+  <!-- Frontend to contacts -->
+  <path class="arrow" d="M 410 211 Q 410 300 290 300 Q 200 300 200 420" />
+  <!-- Frontend to ledger-writer -->
+  <path class="arrow" d="M 520 211 Q 520 280 520 280 Q 520 280 520 340" />
+  <!-- Frontend to balance-reader -->
+  <path class="arrow" d="M 560 211 Q 560 280 700 280 Q 700 280 700 340" />
+  <!-- Frontend to transaction-history -->
+  <path class="arrow" d="M 600 211 Q 600 280 880 280 Q 880 280 880 340" />
+  <!-- Loadgenerator to frontend -->
+  <path class="arrow" d="M 480 111 L 480 155" />
+
+  <!-- Accounts DB -->
+  <g class="node" data-name="accounts-db" data-lang="PostgreSQL" data-port="5432" data-desc="Database for user accounts and associated data. Option to pre-populate with demo users.">
+    <ellipse cx="200" cy="560" rx="80" ry="20" class="db-cylinder-top python" stroke-width="1.5"/>
+    <path d="M 120 560 L 120 610 Q 200 630 280 610 L 280 560" class="db-cylinder-side python" stroke-width="1.5" fill="var(--surface)"/>
+    <ellipse cx="200" cy="610" rx="80" ry="20" class="db-cylinder-top python" stroke-width="1.5" fill="none"/>
+    <text x="200" y="595" text-anchor="middle" class="node-label" style="font-size: 0.8125rem;">accounts-db</text>
+    <text x="200" y="612" text-anchor="middle" class="node-sublabel">PostgreSQL</text>
+  </g>
+
+  <!-- Ledger DB -->
+  <g class="node" data-name="ledger-db" data-lang="PostgreSQL" data-port="5432" data-desc="Ledger of all transactions. Option to pre-populate with transactions for demo users.">
+    <ellipse cx="700" cy="560" rx="80" ry="20" class="db-cylinder-top postgres" stroke-width="1.5"/>
+    <path d="M 620 560 L 620 610 Q 700 630 780 610 L 780 560" class="db-cylinder-side postgres" stroke-width="1.5" fill="var(--surface)"/>
+    <ellipse cx="700" cy="610" rx="80" ry="20" class="db-cylinder-top postgres" stroke-width="1.5" fill="none"/>
+    <text x="700" y="595" text-anchor="middle" class="node-label" style="font-size: 0.8125rem;">ledger-db</text>
+    <text x="700" y="612" text-anchor="middle" class="node-sublabel">PostgreSQL</text>
+  </g>
+
+  <!-- Arrows from services to DBs -->
+  <path class="arrow" d="M 200 476 Q 200 520 200 540" />
+  <path class="arrow" d="M 200 396 Q 200 480 200 540" />
+  <path class="arrow" d="M 520 396 Q 520 480 650 480 Q 650 540 700 540" />
+  <path class="arrow" d="M 700 396 Q 700 480 700 540" />
+  <path class="arrow" d="M 880 396 Q 880 480 750 480 Q 750 540 700 540" />
+
+</svg>
+
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-dot" style="background: var(--python);"></div>
+    <span>Python</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background: var(--java);"></div>
+    <span>Java (Spring Boot)</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background: var(--postgres);"></div>
+    <span>PostgreSQL</span>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip">
+  <h3 id="tt-title"></h3>
+  <div class="meta" id="tt-meta"></div>
+  <div class="desc" id="tt-desc"></div>
+</div>
+
+<script>
+  const tooltip = document.getElementById('tooltip');
+  const ttTitle = document.getElementById('tt-title');
+  const ttMeta = document.getElementById('tt-meta');
+  const ttDesc = document.getElementById('tt-desc');
+
+  document.querySelectorAll('.node').forEach(node => {
+    node.addEventListener('mouseenter', (e) => {
+      const name = node.dataset.name;
+      const lang = node.dataset.lang;
+      const port = node.dataset.port;
+      const desc = node.dataset.desc;
+
+      ttTitle.textContent = name;
+      ttMeta.innerHTML = `<span class="badge ${lang.toLowerCase().includes('python') ? 'python' : lang.toLowerCase().includes('java') ? 'java' : 'postgres'}">${lang}</span> Port: ${port}`;
+      ttDesc.textContent = desc;
+      tooltip.classList.add('visible');
+    });
+
+    node.addEventListener('mousemove', (e) => {
+      tooltip.style.left = (e.pageX + 16) + 'px';
+      tooltip.style.top = (e.pageY + 16) + 'px';
+    });
+
+    node.addEventListener('mouseleave', () => {
+      tooltip.classList.remove('visible');
+    });
+  });
+</script>
+
+</body>
+</html>
