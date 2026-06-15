@@ -37,6 +37,7 @@ limitations under the License.
               <div class="row mt-4">
                 <div class="col-10 offset-1 mb-2">
                   <form id="signup-form" class="needs-validation" novalidate="" method="POST" action="/signup">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <h4 class="mb-4">Account Information</h4>
                     <div id="alertBanner" class="alert alert-danger mb-4 hidden" role="alert">
                       <span class="alert-icon mr-2 material-icons error-icon">error</span>Passwords don't match. Please try again.

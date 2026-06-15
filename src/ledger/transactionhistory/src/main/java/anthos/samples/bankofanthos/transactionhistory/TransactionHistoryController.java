@@ -169,7 +169,10 @@ public final class TransactionHistoryController {
             @PathVariable String accountId) {
 
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            bearerToken = bearerToken.split("Bearer ")[1];
+            bearerToken = bearerToken.substring(7).trim();
+            if (bearerToken.isEmpty()) {
+                bearerToken = null;
+            }
         }
         try {
             DecodedJWT jwt = verifier.verify(bearerToken);

@@ -21,6 +21,7 @@ import datetime
 import json
 import logging
 import os
+import secrets
 import socket
 from decimal import Decimal, DecimalException
 from time import sleep
@@ -29,7 +30,7 @@ import requests
 from requests.exceptions import HTTPError, RequestException
 import jwt
 from flask import Flask, abort, jsonify, make_response, redirect, \
-    render_template, request, url_for
+    render_template, request, session, url_for
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -49,7 +50,7 @@ from traced_thread_pool_executor import TracedThreadPoolExecutor
 BALANCE_NAME = "balance"
 CONTACTS_NAME = "contacts"
 TRANSACTION_LIST_NAME = "transaction_list"
-TRANSACTION_FEE_RATE = Decimal('0.017')  # Reference constant — fee is applied server-side in LedgerWriterController  # noqa: F841
+TRANSACTION_FEE_RATE = Decimal('0.025')  # Reference constant — fee is applied server-side in LedgerWriterController  # noqa: F841
 
 # pylint: disable-msg=too-many-locals
 # pylint: disable-msg=too-many-branches
@@ -58,6 +59,7 @@ def create_app():
     of the Frontend Flask App
     """
     app = Flask(__name__)
+    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
     # Disabling unused-variable for lines with route decorated functions
     # as pylint thinks they are unused
@@ -203,6 +205,8 @@ def create_app():
 
     @app.route('/payment', methods=['POST'])
     def payment():
+        if request.form.get("csrf_token") != session.get("csrf_token"):
+            return abort(403)
         """
         Submits payment request to ledgerwriter service
 
@@ -265,6 +269,8 @@ def create_app():
 
     @app.route('/deposit', methods=['POST'])
     def deposit():
+        if request.form.get("csrf_token") != session.get("csrf_token"):
+            return abort(403)
         """
         Submits deposit request to ledgerwriter service
 
@@ -414,8 +420,12 @@ def create_app():
                                         _external=True,
                                         _scheme=app.config['SCHEME']))
 
+        csrf_token = secrets.token_urlsafe(32)
+        session['csrf_token'] = csrf_token
+
         return render_template('login.html',
                                app_name=app_name,
+                               csrf_token=csrf_token,
                                bank_name=os.getenv('BANK_NAME', 'Bank of Anthos'),
                                cluster_name=cluster_name,
                                cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
@@ -432,6 +442,8 @@ def create_app():
 
     @app.route('/login', methods=['POST'])
     def login():
+        if request.form.get("csrf_token") != session.get("csrf_token"):
+            return abort(403)
         """
         Submits login request to userservice and saves resulting token
 
@@ -468,7 +480,8 @@ def create_app():
                 resp = make_response(redirect(url_for('home',
                                                       _external=True,
                                                       _scheme=app.config['SCHEME'])))
-            resp.set_cookie(app.config['TOKEN_NAME'], token, max_age=max_age)
+            resp.set_cookie(app.config['TOKEN_NAME'], token, max_age=max_age,
+                              secure=True, httponly=True, samesite='Strict')
             app.logger.info('Successfully logged in.')
             return resp
         except (RequestException, HTTPError) as err:
@@ -486,6 +499,12 @@ def create_app():
         already logged in and consented.
         """
         redirect_uri = request.args.get('redirect_uri')
+        if ('ALLOWED_OAUTH_REDIRECT_URI' in os.environ and
+                redirect_uri != os.environ['ALLOWED_OAUTH_REDIRECT_URI']):
+            return redirect(url_for('login',
+                                    msg='Error: Invalid redirect_uri',
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
         state = request.args.get('state')
         app_name = request.args.get('app_name')
         token = request.cookies.get(app.config['TOKEN_NAME'])
@@ -518,12 +537,20 @@ def create_app():
 
     @app.route('/consent', methods=['POST'])
     def consent():
+        if request.form.get("csrf_token") != session.get("csrf_token"):
+            return abort(403)
         """
         Check consent, write cookie if yes, and redirect accordingly
         """
         consent = request.args['consent']
         state = request.args['state']
         redirect_uri = request.args['redirect_uri']
+        if ('ALLOWED_OAUTH_REDIRECT_URI' in os.environ and
+                redirect_uri != os.environ['ALLOWED_OAUTH_REDIRECT_URI']):
+            return redirect(url_for('login',
+                                    msg='Error: Invalid redirect_uri',
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
         token = request.cookies.get(app.config['TOKEN_NAME'])
 
         app.logger.debug('Checking consent. consent: %s', consent)
@@ -531,7 +558,8 @@ def create_app():
         if consent == "true":
             app.logger.info('User consent granted.')
             resp = _auth_callback_helper(state, redirect_uri, token)
-            resp.set_cookie(app.config['CONSENT_COOKIE'], 'true')
+            resp.set_cookie(app.config['CONSENT_COOKIE'], 'true',
+                              secure=True, httponly=True, samesite='Strict')
         else:
             app.logger.info('User consent denied.')
             resp = make_response(redirect(redirect_uri + '#error=access_denied', 302))
@@ -567,8 +595,12 @@ def create_app():
             return redirect(url_for('home',
                                     _external=True,
                                     _scheme=app.config['SCHEME']))
+        csrf_token = secrets.token_urlsafe(32)
+        session['csrf_token'] = csrf_token
+
         return render_template('signup.html',
                                bank_name=os.getenv('BANK_NAME', 'Bank of Anthos'),
+                               csrf_token=csrf_token,
                                cluster_name=cluster_name,
                                cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
                                platform=platform,
@@ -578,6 +610,8 @@ def create_app():
 
     @app.route("/signup", methods=['POST'])
     def signup():
+        if request.form.get("csrf_token") != session.get("csrf_token"):
+            return abort(403)
         """
         Submits signup request to userservice
 
@@ -618,7 +652,8 @@ def create_app():
     def decode_token(token):
         return jwt.decode(algorithms='RS256',
                           jwt=token,
-                          options={"verify_signature": False})
+                          key=app.config['PUBLIC_KEY'],
+                          options={"verify_signature": True})
 
     def verify_token(token):
         """

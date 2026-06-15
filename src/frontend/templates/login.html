@@ -52,8 +52,10 @@ limitations under the License.
                   </div>
                   {% if response_type == "code" %}
                   <form id="login-form" class="needs-validation" novalidate="" method="POST" action="/login?response_type={{ response_type }}&state={{ state }}&redirect_uri={{ redirect_uri }}&app_name={{ app_name }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   {% else %}
                   <form id="login-form" class="needs-validation" novalidate="" method="POST" action="/login">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   {% endif %}
                     <label class="text-uppercase text-muted secondary-text" for="username">Username</label>
                     <div class="input-group mt-2d mb-5">

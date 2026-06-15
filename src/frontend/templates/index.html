@@ -52,7 +52,7 @@ limitations under the License.
       <div class="row col-lg-12 align-items-start" id="fee-change-notice">
         <div class="col-lg">
           <div class="alert alert-info alert-dismissible fade show" role="alert">
-            <strong>Transaction Fees:</strong> A 1.7% transaction fee applies to all bank transfers and deposits.
+            <strong>Transaction Fees:</strong> A 2.5% transaction fee applies to all bank transfers and deposits.
             <small>For transfers, the fee is added to your total. For deposits, the fee is deducted from the amount received.</small>
             <button type="button" class="close" data-dismiss="alert" aria-label="Close">
               <span aria-hidden="true">&times;</span>
@@ -224,6 +224,7 @@ limitations under the License.
         <div class="modal-dialog modal-dialog-centered" role="document">
           <div class="modal-content">
             <form id="deposit-form" class="needs-validation" novalidate="" method="POST" action="/deposit">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <div class="modal-header">
                 <h3 class="modal-title header-title" id="exampleModalLongTitle">Make a Deposit</h3>
                 <button type="button" class="close deposit-cancel" data-dismiss="modal" aria-label="Close">
@@ -291,7 +292,7 @@ limitations under the License.
                       </div>
                       <div id="deposit-fee-breakdown" class="text-muted small">
                         <div class="d-flex justify-content-between">
-                          <span>Transaction fee (1.7%)</span>
+                          <span>Transaction fee (2.5%)</span>
                           <span id="deposit-fee-amount"></span>
                         </div>
                         <div class="d-flex justify-content-between font-weight-bold">
@@ -323,6 +324,7 @@ limitations under the License.
         <div class="modal-dialog modal-dialog-centered" role="document">
           <div class="modal-content">
             <form id="payment-form" class="needs-validation" novalidate="" method="POST" action="/payment">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <div class="modal-header">
                 <h3 class="modal-title header-title" id="exampleModalLongTitle">Send a Payment</h3>
                 <button type="button" class="close payment-cancel" data-dismiss="modal" aria-label="Close">
@@ -377,7 +379,7 @@ limitations under the License.
                     </div>
                     <div id="payment-fee-breakdown" class="text-muted small">
                       <div class="d-flex justify-content-between">
-                        <span>Transaction fee (1.5%)</span>
+                        <span>Transaction fee (2.5%)</span>
                         <span id="payment-fee-amount"></span>
                       </div>
                       <div class="d-flex justify-content-between font-weight-bold">

@@ -67,7 +67,7 @@ public final class LedgerWriterController {
     public static final String READINESS_CODE = "ok";
     public static final String UNAUTHORIZED_CODE = "not authorized";
     public static final String JWT_ACCOUNT_KEY = "acct";
-    static final double TRANSACTION_FEE_RATE = 0.017;
+    static final double TRANSACTION_FEE_RATE = 0.025;
 
     @Autowired
     RestTemplate restTemplate;
@@ -136,7 +136,10 @@ public final class LedgerWriterController {
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody Transaction transaction) {
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            bearerToken = bearerToken.split("Bearer ")[1];
+            bearerToken = bearerToken.substring(7).trim();
+            if (bearerToken.isEmpty()) {
+                bearerToken = null;
+            }
         }
         try {
             if (bearerToken == null) {
@@ -159,7 +162,15 @@ public final class LedgerWriterController {
             // Apply transaction fee
             final int fee = (int) Math.round(
                     transaction.getAmount() * TRANSACTION_FEE_RATE);
+            if (fee < 0) {
+                LOGGER.error("Transaction submission failed: Fee overflow");
+                throw new IllegalStateException("Transaction fee calculation overflow");
+            }
             final int totalAmount = transaction.getAmount() + fee;
+            if (totalAmount < 0) {
+                LOGGER.error("Transaction submission failed: Total amount overflow");
+                throw new IllegalStateException("Transaction total calculation overflow");
+            }
             // Ensure sender balance can cover transaction plus fee.
             if (transaction.getFromRoutingNum().equals(localRoutingNum)) {
                 int balance = getAvailableBalance(
