@@ -509,6 +509,8 @@ def create_app():
         app_name = request.args.get('app_name')
         token = request.cookies.get(app.config['TOKEN_NAME'])
         consented = request.cookies.get(app.config['CONSENT_COOKIE'])
+        csrf_token = secrets.token_urlsafe(32)
+        session['csrf_token'] = csrf_token
         if verify_token(token):
             if consented == "true":
                 app.logger.debug('User consent already granted.')
@@ -519,6 +521,7 @@ def create_app():
                                    app_name=app_name,
                                    bank_name=os.getenv('BANK_NAME', 'Bank of Anthos'),
                                    cluster_name=cluster_name,
+                                   csrf_token=csrf_token,
                                    cymbal_logo=os.getenv('CYMBAL_LOGO', 'false'),
                                    platform=platform,
                                    platform_display_name=platform_display_name,
@@ -638,6 +641,8 @@ def create_app():
 
     @app.route('/logout', methods=['POST'])
     def logout():
+        if request.form.get("csrf_token") != session.get("csrf_token"):
+            return abort(403)
         """
         Logs out user by deleting token cookie and redirecting to login page
         """
@@ -654,6 +659,8 @@ def create_app():
                           jwt=token,
                           key=app.config['PUBLIC_KEY'],
                           options={"verify_signature": True})
+
+    app.decode_token = decode_token
 
     def verify_token(token):
         """

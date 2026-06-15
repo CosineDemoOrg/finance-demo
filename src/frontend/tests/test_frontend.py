@@ -19,6 +19,7 @@ import json
 import sys
 import os
 import unittest
+import jwt
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch, mock_open, MagicMock
@@ -610,6 +611,53 @@ class TestFrontend(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+    # --- Security tests ---
+
+    def test_csrf_missing_rejects_payment(self):
+        self.test_app.set_cookie("token", EXAMPLE_TOKEN)
+        with self.test_app.session_transaction() as sess:
+            sess["csrf_token"] = "valid_csrf_token"
+        response = self.test_app.post("/payment", data={'account_num': '9876543210', 'amount': '10.00', 'uuid': 'test-uuid'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_csrf_missing_rejects_deposit(self):
+        self.test_app.set_cookie("token", EXAMPLE_TOKEN)
+        with self.test_app.session_transaction() as sess:
+            sess["csrf_token"] = "valid_csrf_token"
+        response = self.test_app.post("/deposit", data={'account': json.dumps({"account_num": "1111111111", "routing_num": "111111111"}), 'amount': '50.00', 'uuid': 'test-uuid'})
+        self.assertEqual(response.status_code, 403)
+
+    @patch("frontend.requests.get")
+    def test_login_cookie_security_flags(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"token": EXAMPLE_TOKEN}
+        mock_get.return_value = mock_resp
+        response = self.test_app.post("/login", data={'username': EXAMPLE_USER, 'password': 'password'})
+        self.assertEqual(response.status_code, 302)
+        cookie_header = response.headers.getlist("Set-Cookie")
+        token_cookie = next((c for c in cookie_header if "token=" in c), None)
+        self.assertIsNotNone(token_cookie)
+        self.assertIn("Secure", token_cookie)
+        self.assertIn("HttpOnly", token_cookie)
+        self.assertIn("SameSite=Strict", token_cookie)
+
+    def test_decode_token_verifies_signature(self):
+        bad_token = jwt.encode(EXAMPLE_USER_PAYLOAD, "wrong-secret", algorithm="HS256")
+        with self.assertRaises(Exception):
+            self.flask_app.decode_token(bad_token)
+
+    def test_consent_post_invalid_redirect_uri(self):
+        with self.test_app.session_transaction() as sess:
+            sess["csrf_token"] = "dummy"
+        with patch.dict("os.environ", {"ALLOWED_OAUTH_REDIRECT_URI": "https://allowed.example.com/callback"}):
+            response = self.test_app.post("/consent?consent=true&state=xyz&redirect_uri=https://evil.com",
+                                          data={"csrf_token": "dummy"})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response.headers["Location"])
+        self.assertIn("Invalid", response.headers["Location"])
+    
 class TestFeeChangeBanner(unittest.TestCase):
     """Tests for the fee change notification banner on the home page."""
 

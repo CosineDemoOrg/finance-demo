@@ -25,6 +25,7 @@
                 </a>
                 <div class="dropdown-menu" aria-labelledby="accountDropdown">
                   <form id="logout-form" method="POST" action="/logout">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <a class="dropdown-item" onclick="document.querySelector('#logout-form').submit();">Sign out<i class="fa-icon-spacer fas fa-sign-out-alt"></i></a>
                   </form>
                 </div>

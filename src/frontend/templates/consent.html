@@ -37,6 +37,7 @@ limitations under the License.
               <div class="row align-items-center mt-2">
                 <div class="col-10 offset-1 mb-4">
                   <form id="consent-form" class="needs-validation" novalidate="" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button class="btn btn-sign-in btn-block mb-4" type="submit" formaction="/consent?consent=true&state={{ state }}&redirect_uri={{ redirect_uri }}">Approve</button>
                     <button class="btn btn-deny btn-block mb-4" type="submit" formaction="/consent?consent=false&state={{ state }}&redirect_uri={{ redirect_uri }}">Deny</button>
                   </form>
